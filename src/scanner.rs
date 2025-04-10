@@ -85,6 +85,33 @@ impl Scanner {
         }
     }
 
+    fn make_token_if(&mut self, expected: char, matched_type: TokenType, unmatched_type: TokenType) -> Token {
+        if self.match_char(expected) {
+            self.make_token(matched_type)
+        } else {
+            self.make_token(unmatched_type)
+        }
+    }
+
+    fn string(&mut self) -> Token {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return self.error_token("Unterminated string");
+        }
+
+        self.advance(); // 消耗闭合的引号
+        let value: String = self.source[self.start + 1..self.current - 1]
+            .iter()
+            .collect();
+        
+        self.make_token(TokenType::String(value))
+    }
     /// 处理标识符和关键字
     fn identifier(&mut self) -> Token {
         while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
@@ -98,7 +125,7 @@ impl Scanner {
         // 查找关键字
         let token_type = self.keywords
             .get(text.as_str())
-            .copied()
+            .map(|t| t.clone())  
             .unwrap_or(TokenType::Identifier(text));
         
         self.make_token(token_type)
@@ -168,21 +195,36 @@ impl Scanner {
         true
     }
 
-    /// 生成Token对象
+    
     fn make_token(&self, token_type: TokenType) -> Token {
-        let lexeme = self.source[self.start..self.current]
+        let lexeme: String = self.source[self.start..self.current]
             .iter()
             .collect();
         Token::new(token_type, self.line, lexeme)
     }
 
-    /// 生成错误Token
     fn error_token(&self, message: &str) -> Token {
-        Token::new(TokenType::Error(message.to_string()), self.line, String::new())
+        Token::new(
+            TokenType::Error(message.to_string()),
+            self.line,
+            String::new(),
+        )
     }
-
     /// 检查是否到达输入结尾
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
+    }
+
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        loop {
+            let token = self.scan_token();
+            let is_eof = matches!(token.token_type, TokenType::Eof);
+            tokens.push(token);
+            if is_eof {
+                break;
+            }
+        }
+        tokens
     }
 }

@@ -1,6 +1,6 @@
-use crate::scanner::Scanner; // 直接通过crate根路径导入
-use crate::token::{Token, TokenType}; 
-use crate::assert_token; // 导入自定义宏
+use rlox::scanner::Scanner; // 直接通过crate根路径导入
+use rlox::token::{Token, TokenType}; 
+use rlox::assert_token; // 导入自定义宏
 
 #[test]
 fn test_basic_symbols() {

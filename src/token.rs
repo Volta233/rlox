@@ -1,37 +1,55 @@
-#[derive(Debug, Clone)]
+use serde::Serialize;
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum TokenType {
-    // 单字符Token
-    LeftParen, RightParen, LeftBrace, RightBrace,
-    Comma, Dot, Minus, Plus, Semicolon, Slash, Star,
-    
-    // 单/双字符Token  
-    Bang, BangEqual,
-    Equal, EqualEqual,
-    Greater, GreaterEqual,
-    Less, LessEqual,
-    
-    // 字面量
+    // 所有变体保持不变
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
     Identifier(String),
     String(String),
     Number(f64),
-    
-    // 关键字
-    KeywordVar, KeywordFun, KeywordClass, 
-    KeywordIf, KeywordElse, KeywordWhile,
-    KeywordFor, KeywordReturn,
-    
+    KeywordVar,
+    KeywordFun,
+    KeywordClass,
+    KeywordIf,
+    KeywordElse,
+    KeywordWhile,
+    KeywordFor,
+    KeywordReturn,
+    Error(String),
     Eof,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Token {
     pub token_type: TokenType,
     pub line: usize,
-    pub lexeme: String,  // 新增字段保存原始字符串
+    pub lexeme: String,
 }
 
 impl Token {
     pub fn new(token_type: TokenType, line: usize, lexeme: String) -> Self {
-        Self { token_type, line, lexeme }
+        Self {
+            token_type,
+            line,
+            lexeme,
+        }
     }
 }
