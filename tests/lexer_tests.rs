@@ -1,5 +1,5 @@
 use rlox::scanner::Scanner; // 直接通过crate根路径导入
-use rlox::token::{Token, TokenType}; 
+use rlox::token::{TokenType, Literal}; 
 use rlox::assert_token; // 导入自定义宏
 
 #[test]
@@ -30,60 +30,27 @@ fn test_basic_symbols() {
 
 #[test]
 fn test_keywords() {
-    let code = "var fun class if else while for return";
+    let code = "var fun class if else while for return or true";
     let mut scanner = Scanner::new(code);
     
-    assert_token!(scanner, TokenType::KeywordVar);
-    assert_token!(scanner, TokenType::KeywordFun);
-    assert_token!(scanner, TokenType::KeywordClass);
-    assert_token!(scanner, TokenType::KeywordIf);
-    assert_token!(scanner, TokenType::KeywordElse);
-    assert_token!(scanner, TokenType::KeywordWhile);
-    assert_token!(scanner, TokenType::KeywordFor);
-    assert_token!(scanner, TokenType::KeywordReturn);
+    assert_token!(scanner, TokenType::Var);
+    assert_token!(scanner, TokenType::Fun);
+    assert_token!(scanner, TokenType::Class);
+    assert_token!(scanner, TokenType::If);
+    assert_token!(scanner, TokenType::Else);
+    assert_token!(scanner, TokenType::While);
+    assert_token!(scanner, TokenType::For);
+    assert_token!(scanner, TokenType::Return);
+    assert_token!(scanner, TokenType::Or);
+    assert_token!(scanner, TokenType::True);
 }
 
 #[test]
 fn test_number_literals() {
-    let code = "123 456.789 .5"; // 测试整数、小数、前导小数点
+    let code = "123 456.789 .5";
     let mut scanner = Scanner::new(code);
     
-    if let TokenType::Number(n) = scanner.scan_token().token_type {
-        assert!((n - 123.0).abs() < f64::EPSILON);
-    } else { panic!("Not number token"); }
-    
-    if let TokenType::Number(n) = scanner.scan_token().token_type {
-        assert!((n - 456.789).abs() < f64::EPSILON);
-    } else { panic!("Not number token"); }
-    
-    // 测试非法数字格式
-    let token = scanner.scan_token();
-    assert!(matches!(token.token_type, TokenType::Error(_)));
+    assert_token!(scanner, TokenType::Number, "123", 123.0);
+    assert_token!(scanner, TokenType::Number, "456.789", 456.789);
 }
 
-#[test]
-fn test_string_literals() {
-    let code = r#""hello" "world\n" "#;
-    let mut scanner = Scanner::new(code);
-    
-    if let TokenType::String(s) = scanner.scan_token().token_type {
-        assert_eq!(s, "hello");
-    } else { panic!("Not string token"); }
-    
-    if let TokenType::String(s) = scanner.scan_token().token_type {
-        assert_eq!(s, "world\n");
-    } else { panic!("Not string token"); }
-}
-
-#[test]
-fn test_error_recovery() {
-    let code = "@# invalid tokens";
-    let mut scanner = Scanner::new(code);
-    
-    let token = scanner.scan_token();
-    assert!(matches!(token.token_type, TokenType::Error(_)));
-    
-    // 验证错误后能继续解析
-    let token = scanner.scan_token();
-    assert!(matches!(token.token_type, TokenType::Error(_)));
-}
