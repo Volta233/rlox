@@ -81,7 +81,7 @@ impl Scanner {
             // 标识符/关键字
             c if c.is_ascii_alphabetic() || c == '_' => self.identifier(),
             
-            _ => self.error_token("Unexpected character"),
+            _ => self.error_token("Unexpected character."),
         }
     }
 
