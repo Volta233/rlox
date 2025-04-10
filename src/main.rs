@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::fs;
 use std::path::Path;
+use rlox::scanner::Scanner;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -16,19 +17,12 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    
-    // 读取输入文件
     let code = fs::read_to_string(&args.input)?;
     
-    // 创建词法分析器
     let mut scanner = Scanner::new(&code);
-    let tokens = scanner.scan_tokens();
+    let tokens = scanner.scan_tokens(); // 使用新方法
     
-    // 生成输出路径
-    let output_path = Path::new(&args.output)
-        .join("lex_result.json");
-    
-    // 序列化输出
+    let output_path = Path::new(&args.output).join("lex_result.json");
     let json = serde_json::to_string_pretty(&tokens)?;
     fs::write(output_path, json)?;
     
