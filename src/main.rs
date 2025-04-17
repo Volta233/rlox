@@ -1,8 +1,13 @@
 use clap::Parser;
 use std::fs;
 use std::path::Path;
-use std::io::{self, Write};
 use rlox::scanner::Scanner;
+
+mod token;
+mod statement;
+mod scanner;
+mod syntaxer;
+mod expr;
 
 #[derive(Parser)]
 #[command(author, version, about)]
@@ -32,17 +37,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 执行词法分析
     match scanner.scan_tokens() {
         Ok(tokens) => {
-            // 如果有输出目录，保存结果到JSON文件
+            // 新增语法分析
+            let mut parser = syntaxer::Parser::new(tokens.clone());
+            let ast = match parser.parse() {
+                Ok(ast) => ast,
+                Err(e) => {
+                    eprintln!("Syntax error: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            // 输出处理
             if let Some(output_dir) = args.output {
-                let output_path = Path::new(&output_dir).join("lex_result.json");
-                fs::create_dir_all(&output_dir)?;
-                let json = serde_json::to_string_pretty(&tokens)?;
-                fs::write(output_path, json)?;
-                println!("Lexical analysis results saved to: {}", output_dir);
-            } 
-            // 否则直接打印结果到终端
-            else {
-                println!("{:#?}", tokens);
+                // 保存词法结果
+                let lex_path = Path::new(&output_dir).join("lex_result.json");
+                fs::write(lex_path, serde_json::to_string_pretty(&tokens)?)?;
+                
+                // 保存语法结果
+                let ast_path = Path::new(&output_dir).join("ast_result.json");
+                fs::write(ast_path, serde_json::to_string_pretty(&ast)?)?;
+                println!("Results saved to: {}", output_dir);
+            } else {
+                println!("AST: {:#?}", ast);
             }
         }
         Err(errors) => {

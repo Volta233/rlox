@@ -1,4 +1,7 @@
 pub mod scanner;  // 导出scanner模块
+pub mod syntaxer;
+pub mod expr;
+pub mod statement;
 pub mod token;    // 导出token模块
 
 #[macro_export]
