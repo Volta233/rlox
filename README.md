@@ -4,6 +4,6 @@
 
 
 TODO：
-词法分析
+词法分析  file test: cargo run -- --input test.lox
 语法分析
 语义分析
