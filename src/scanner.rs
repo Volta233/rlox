@@ -47,8 +47,8 @@ impl Scanner {
 
         loop {
             let token = self.scan_token();
-            if let TokenType::Error(msg) = &token.token_type {
-                errors.push(format!("[line {}] {}", token.line, msg));
+            if let TokenType::Error = token.token_type {
+                errors.push(token.lexeme.clone());  // 从 lexeme 获取错误信息
                 self.had_error = true;
             }
             let is_eof = matches!(token.token_type, TokenType::Eof);
@@ -298,9 +298,9 @@ impl Scanner {
     fn error_token(&mut self, message: &str) -> Token {
         self.had_error = true;
         Token::new(
-            TokenType::Error(format!("[line {}] {}", self.line, message)),
+            TokenType::Error,  // 使用简单的 Error 枚举值
             self.line,
-            String::new(),
+            format!("[line {}] {}", self.line, message),  // 错误信息放在 lexeme
             None
         )
     }

@@ -10,8 +10,9 @@ pub enum Literal {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+
 pub enum TokenType {
-    // --- 单字符符号（Single-character tokens） ---
+    // --- 单字符符号 ---
     LeftParen,
     RightParen,
     LeftBrace,
@@ -24,7 +25,7 @@ pub enum TokenType {
     Slash,
     Star,
 
-    // --- 一或两个字符符号（One or two character tokens） ---
+    // --- 一或两个字符符号 ---
     Bang,
     BangEqual,
     Equal,
@@ -34,12 +35,12 @@ pub enum TokenType {
     Less,
     LessEqual,
 
-    // --- 字面量（Literals）---
-    Identifier,  // 移除 String 参数，用 lexeme 和 literal 分离
+    // --- 字面量 ---
+    Identifier,
     String,
     Number,
 
-    // --- 关键字（Keywords）---
+    // --- 关键字 ---
     And,    
     Class,
     Else,
@@ -57,8 +58,10 @@ pub enum TokenType {
     Var,
     While,
 
+    // --- 错误类型 ---
+    Error,  // 改为简单的枚举值，不带字符串
+
     // --- 其他 ---
-    // Error(String), 
     Eof,
 }
 
@@ -66,8 +69,8 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub line: usize,
-    pub lexeme: String,     // 原始字符串内容
-    pub literal: Option<Literal>,   // 字面量的值
+    pub lexeme: String,     // 错误信息将存储在这里
+    pub literal: Option<Literal>,
 }
 
 impl Token {
@@ -75,13 +78,13 @@ impl Token {
         token_type: TokenType, 
         line: usize, 
         lexeme: String,
-        literal: Option<Literal>  // 新增 literal 参数
+        literal: Option<Literal>
     ) -> Self {
         Self {
             token_type,
             line,
             lexeme,
-            literal,             // 保存字面量
+            literal,
         }
     }
 }

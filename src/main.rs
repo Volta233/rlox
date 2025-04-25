@@ -1,15 +1,10 @@
-use clap::Parser;
+use clap::Parser; // 这是 clap 的 Parser trait
 use std::fs;
 use std::path::Path;
 use rlox::scanner::Scanner;
+use rlox::syntaxer::Parser as SyntaxParser; // 重命名语法分析器
 
-mod token;
-mod statement;
-mod scanner;
-mod syntaxer;
-mod expr;
-
-#[derive(Parser)]
+#[derive(clap::Parser)] // 明确指定使用 clap 的宏
 #[command(author, version, about)]
 struct Args {
     /// Input Lox file path (.lox)
@@ -24,52 +19,40 @@ struct Args {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     
-    // 检查输入文件扩展名
     if !args.input.ends_with(".lox") {
         eprintln!("Error: Input file must have .lox extension");
         std::process::exit(1);
     }
 
-    // 读取Lox文件内容
     let code = fs::read_to_string(&args.input)?;
     let mut scanner = Scanner::new(&code);
     
-    // 执行词法分析
     match scanner.scan_tokens() {
         Ok(tokens) => {
-            // 新增语法分析
-            let mut parser = syntaxer::Parser::new(tokens.clone());
+            // 使用重命名后的语法分析器
+            let mut parser = SyntaxParser::new(tokens);
             let ast = match parser.parse() {
                 Ok(ast) => ast,
-                Err(e) => {
-                    eprintln!("Syntax error: {}", e);
-                    std::process::exit(1);
-                }
+                Err(e) => return Err(Box::new(e)), // 自动转换到 dyn Error
             };
 
-            // 输出处理
             if let Some(output_dir) = args.output {
-                // 保存词法结果
                 let lex_path = Path::new(&output_dir).join("lex_result.json");
                 fs::write(lex_path, serde_json::to_string_pretty(&tokens)?)?;
                 
-                // 保存语法结果
                 let ast_path = Path::new(&output_dir).join("ast_result.json");
                 fs::write(ast_path, serde_json::to_string_pretty(&ast)?)?;
                 println!("Results saved to: {}", output_dir);
             } else {
                 println!("AST: {:#?}", ast);
             }
+            Ok(())
         }
         Err(errors) => {
-            // 打印所有词法错误
-            eprintln!("Lexical errors found:");
-            for err in errors {
-                eprintln!("{}", err);
-            }
-            std::process::exit(1);
+            Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                errors.join("\n")
+            )))
         }
     }
-    
-    Ok(())
 }
