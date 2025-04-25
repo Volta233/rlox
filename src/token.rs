@@ -58,7 +58,7 @@ pub enum TokenType {
     While,
 
     // --- 其他 ---
-    // Error(String), 
+    Error,
     Eof,
 }
 
