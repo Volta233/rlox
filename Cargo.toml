@@ -7,3 +7,7 @@ edition = "2024"
 clap = { version = "4.5.27", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[lib]
+name = "rlox"        # 库的名称（默认与包名相同）
+path = "src/lib.rs"  # 显式声明入口文件路径（通常可省略）
