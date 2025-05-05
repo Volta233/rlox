@@ -66,6 +66,26 @@ impl Interpreter {
                 }
             }
             // 其他表达式类型...
+            Expr::Call { callee, paren, arguments } => {
+                // 1. 解析被调用对象
+                let callee_val = self.evaluate(callee)?;
+                
+                // 2. 解析参数列表
+                let mut args = Vec::new();
+                for arg in arguments {
+                    args.push(self.evaluate(arg)?);
+                }
+                
+                // 3. 执行调用
+                match callee_val {
+                    Literal::FunctionValue(func) => self.call_function(&func, args),
+                    Literal::ClassValue(cls) => self.call_class_constructor(&cls, args, paren),
+                    _ => Err(RuntimeError::Runtime(
+                        paren.clone(),
+                        "Can only call functions and classes".into()
+                    )),
+                }
+            }
         }
     }
 
@@ -134,11 +154,11 @@ impl Interpreter {
             
             // 函数比较（指针地址比较）
             (Literal::FunctionValue(a), Literal::FunctionValue(b)) => 
-                std::ptr::eq(a.as_ref(), b.as_ref()),
+                std::ptr::eq(a, b),
             
             // 类比较（名称和内存地址双重校验）
             (Literal::ClassValue(a), Literal::ClassValue(b)) => 
-                a.name == b.name && std::ptr::eq(a.as_ref(), b.as_ref()),
+                a.name == b.name && std::ptr::eq(a, b),
             
             // 其他情况均为不相等
             _ => false
@@ -203,20 +223,24 @@ impl Interpreter {
                 let previous = self.environment.clone();
                 self.environment = Box::new(Environment::new(Some(previous)));
                 let result = self.execute_block(statements);
-                self.environment = self.environment.enclosing.unwrap();
+                if let Some(env) = self.environment.enclosing.take() {
+                    self.environment = env;
+                }
                 result
             }
             Stmt::If { condition, then_branch, else_branch } => {
-                if self.is_truthy(&self.evaluate(condition)?) {
+                let cond_result = self.evaluate(condition)?; // 隔离作用域
+                if self.is_truthy(&cond_result) {
                     self.execute(then_branch)
-                } else if let Some(else_stmt) = else_branch {
-                    self.execute(else_stmt)
                 } else {
-                    Ok(())
+                    else_branch.as_ref().map_or(Ok(()), |e| self.execute(e))
                 }
             }
             Stmt::While { condition, body } => {
-                while self.is_truthy(&self.evaluate(condition)?) {
+                while {
+                    let cond = self.evaluate(condition)?; // 每次循环重新计算条件
+                    self.is_truthy(&cond)
+                } {
                     self.execute(body)?;
                 }
                 Ok(())
@@ -227,14 +251,19 @@ impl Interpreter {
                     self.execute(init.as_ref())?;
                 }
                 
-                while self.is_truthy(&match condition {
-                    Some(c) => self.evaluate(c)?,
-                    None => Literal::Boolean(true),
-                }) {
+                loop {
+                    let cond = match condition {
+                        Some(c) => self.evaluate(c)?,
+                        None => Literal::Boolean(true),
+                    };
+                    if !self.is_truthy(&cond) {
+                        break;
+                    }
+                    
                     self.execute(body.as_ref())?;
                     
                     if let Some(inc) = increment {
-                        self.evaluate(inc)?;
+                        self.evaluate(inc)?; 
                     }
                 }
                 Ok(())
@@ -319,13 +348,17 @@ impl Interpreter {
     }
 
     fn call_function(&mut self, func: &LoxFunction, args: Vec<Literal>) -> Result<Literal> {
-        let (params, body) = match *func.declaration {
-            Stmt::Function { ref params, ref body, .. } => 
-                (params, body),
-            _ => return Err(RuntimeError::Runtime(
-                Token::default(), 
-                "Invalid function declaration".into()
-            ))
+        let (params, body) = match func.declaration.as_ref() {
+            Stmt::Function { params, body, .. } => (params, body),
+        _ => return Err(RuntimeError::Runtime(
+            Token::new( 
+                TokenType::Error,
+                0,
+                "".to_string(),
+                None
+            ), 
+            "Invalid function declaration".into()
+        ))
         };
         
         let mut env = Environment::new(
@@ -341,9 +374,9 @@ impl Interpreter {
         let prev_env = self.environment.clone();
         self.environment = Box::new(env);
         
-        let result = self.execute_block(body);
-        
+        let result = self.execute_block(&body);
         self.environment = prev_env;
-        result
+        result?; // 捕获可能抛出的 Return 错误
+        Ok(Literal::Nil) // 或从返回错误中提取值
     }
 }
