@@ -1,7 +1,7 @@
 use crate::token::{Token, Literal};
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,

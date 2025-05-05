@@ -3,6 +3,8 @@ pub mod syntaxer;
 pub mod expr;
 pub mod statement;
 pub mod token;
+pub mod interpreter;
+pub mod environment;
 
 #[macro_export]
 macro_rules! assert_token {

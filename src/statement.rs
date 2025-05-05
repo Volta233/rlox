@@ -2,7 +2,7 @@ use crate::token::Token;
 use serde::Serialize;
 use crate::expr::Expr;
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Stmt {
     Block {
         statements: Vec<Stmt>,
