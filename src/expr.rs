@@ -26,4 +26,8 @@ pub enum Expr {
         paren: Token,           // 右括号token（用于错误定位）
         arguments: Vec<Expr>,    // 参数列表
     },
+    Super {
+        keyword: Token,      // super关键字token
+        method: Token,       // 要调用的方法名
+    },
 }

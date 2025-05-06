@@ -1,6 +1,7 @@
 use crate::token::Token;
 use serde::Serialize;
 use crate::expr::Expr;
+use crate::environment::Environment;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Stmt {

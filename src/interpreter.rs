@@ -1,4 +1,5 @@
 use crate::token::*;
+use std::collections::HashMap;
 use crate::expr::Expr;
 use crate::statement::Stmt;
 use crate::environment::{RuntimeError, Environment};
@@ -84,6 +85,50 @@ impl Interpreter {
                         paren.clone(),
                         "Can only call functions and classes".into()
                     )),
+                }
+            }
+            Expr::Super { keyword, method } => {
+                // 步骤1：获取超类引用
+                let super_class = match self.environment.get(keyword)? {
+                    Literal::ClassValue(c) => c,
+                    _ => return Err(RuntimeError::Runtime(
+                        keyword.clone(),
+                        "Invalid super class".into()
+                    ))
+                };
+    
+                // 步骤2：获取当前实例的this绑定
+                let this_instance = match self.environment.get(&Token::this())? {
+                    Literal::InstanceValue(i) => i,
+                    _ => return Err(RuntimeError::Runtime(
+                        keyword.clone(),
+                        "super must be used in instance method".into()
+                    ))
+                };
+    
+                // 步骤3：查找超类方法
+                let method = super_class.find_method(&method.lexeme)
+                    .ok_or_else(|| RuntimeError::Runtime(
+                        method.clone(),
+                        format!("Undefined method '{}'", method.lexeme)
+                    ))?;
+    
+                // 步骤4：创建闭包环境（绑定this）
+                if let Literal::FunctionValue(mut func) = method {
+                    // 克隆原闭包环境
+                    let mut closure = (*func.closure).clone();
+                    
+                    // 注入 this 实例
+                    closure.define("this".into(), Literal::InstanceValue(this_instance));
+                    func.closure = Box::new(closure);
+                    
+                    Ok(Literal::FunctionValue(func))
+                } else {
+                    // 使用调用方法时的方法名 Token 来构建错误
+                    Err(RuntimeError::Runtime(
+                        keyword.clone(), 
+                        format!("'{}' is not a function", keyword.lexeme).into()
+                    ))
                 }
             }
         }
@@ -378,5 +423,36 @@ impl Interpreter {
         self.environment = prev_env;
         result?; // 捕获可能抛出的 Return 错误
         Ok(Literal::Nil) // 或从返回错误中提取值
+    }
+
+    fn call_class_constructor(
+        &mut self,
+        cls: &LoxClass,
+        args: Vec<Literal>,
+        paren_token: &Token
+    ) -> Result<Literal> {
+        // 步骤1：创建类实例
+        let instance = Literal::InstanceValue(LoxInstance {
+            class: cls.clone(),
+            fields: HashMap::new(),
+        });
+
+        // 步骤2：查找init方法
+        if let Some(init_method) = cls.find_method("init") {
+            // 步骤3：将实例绑定为this
+            let init_func = match init_method {
+                Literal::FunctionValue(f) => f,
+                _ => return Err(RuntimeError::Runtime(
+                    paren_token.clone(),
+                    "Invalid initializer".into()
+                ))
+            };
+
+            // 步骤4：调用init方法（但不需要返回值）
+            let _ = self.call_function(&init_func, args)?;
+        }
+
+        // 步骤5：返回实例（即使没有init方法）
+        Ok(instance)
     }
 }

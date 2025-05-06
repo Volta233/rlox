@@ -16,6 +16,28 @@ pub struct LoxClass {
     pub superclass: Option<Box<LoxClass>>,
 }
 
+impl LoxClass {
+    pub fn find_method(&self, name: &str) -> Option<Literal> {
+        // 在当前类查找
+        if let Some(method) = self.methods.iter().find(|m| match m {
+            Stmt::Function { name: token, .. } => token.lexeme == name,
+            _ => false
+        }) {
+            return Some(Literal::FunctionValue(LoxFunction {
+                declaration: Box::new(method.clone()),
+                closure: Box::new(self.closure.clone()),
+            }));
+        }
+
+        // 递归查找超类
+        if let Some(superclass) = &self.superclass {
+            superclass.find_method(name)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct LoxInstance {
     pub class: LoxClass,
@@ -120,6 +142,15 @@ impl Token {
             line,
             lexeme,
             literal,
+        }
+    }
+
+    pub fn this() -> Self {
+        Self {
+            token_type: TokenType::This,
+            line: 0,
+            lexeme: "this".into(),
+            literal: None,
         }
     }
 }
