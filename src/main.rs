@@ -9,9 +9,11 @@ use rlox::syntaxer::Parser as SyntaxParser; // 重命名语法分析器
 #[command(author, version, about)]
 struct Args {
     /// Input Lox file path 
-    #[arg(short, long)]
+    //#[arg(short, long)]
     input: String,
 }
+
+
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
