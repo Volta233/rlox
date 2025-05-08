@@ -4,38 +4,5 @@ var string = "hello world";
 var bool = true;
 var nil = nil;
 
-print number + float * 2; // 应输出 1035.789
+print number + float * 2; 
 
-if (number > 100 and float < 500) {
-  print "条件成立"; // 应输出
-} else {
-  print "条件不成立";
-}
-
-var i = 0;
-while (i < 3) {
-  print i;
-  i = i + 1;
-}
-
-
-fun greet(name) {
-  print "Hello, " + name + "!";
-}
-
-greet("RLox"); 
-
-class Person {
-  init(name) {
-    this.name = name;
-  }
-
-  sayHi() {
-    print this.name + " says hi!";
-  }
-}
-
-var p = Person("Alice");
-p.sayHi(); 
-
-var x = fun; 

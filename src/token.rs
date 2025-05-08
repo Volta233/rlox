@@ -14,6 +14,7 @@ pub struct LoxClass {
     pub name: String,
     pub methods: Vec<Stmt>,
     pub superclass: Option<Box<LoxClass>>,
+    pub closure: Box<Environment>, // 新增closure字段
 }
 
 impl LoxClass {
@@ -25,7 +26,7 @@ impl LoxClass {
         }) {
             return Some(Literal::FunctionValue(LoxFunction {
                 declaration: Box::new(method.clone()),
-                closure: Box::new(self.closure.clone()),
+                closure: self.closure.clone(), // 使用类的closure字段
             }));
         }
 
@@ -67,7 +68,6 @@ impl Literal {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
-
 pub enum TokenType {
     // --- 单字符符号 ---
     LeftParen,
@@ -116,7 +116,7 @@ pub enum TokenType {
     While,
 
     // --- 错误类型 ---
-    Error,  // 改为简单的枚举值，不带字符串
+    Error,
 
     // --- 其他 ---
     Eof,
@@ -126,7 +126,7 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub line: usize,
-    pub lexeme: String,     // 错误信息将存储在这里
+    pub lexeme: String,
     pub literal: Option<Literal>,
 }
 

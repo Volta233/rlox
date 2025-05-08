@@ -313,7 +313,7 @@ impl Interpreter {
                 }
                 Ok(())
             }
-            Stmt::Function { name, params, body } => {
+            Stmt::Function { name, params:_, body:_ } => {
                 // 将函数存储为环境中的可调用对象
                 let function = LoxFunction {
                     declaration: Box::new(stmt.clone()), // 必须显式装箱
@@ -338,18 +338,18 @@ impl Interpreter {
                     ))
                 };
                 
-                // 创建类对象
                 let class = LoxClass {
                     name: name.lexeme.clone(),
                     methods: methods.iter().map(|m| m.clone()).collect(),
-                    superclass
+                    superclass,
+                    closure: Box::new(self.environment.deep_clone()), // 新增closure初始化
                 };
                 
                 self.environment.define(name.lexeme.clone(), Literal::ClassValue(class));
                 Ok(())
             }
             
-            Stmt::Return { keyword, value } => {
+            Stmt::Return { keyword:_, value } => {
                 let return_value = match value {
                     Some(expr) => self.evaluate(expr)?,
                     None => Literal::Nil,
