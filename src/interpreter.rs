@@ -63,6 +63,8 @@ impl Interpreter {
                     // 逻辑运算
                     TokenType::EqualEqual => Ok(Literal::Boolean(self.is_equal(&left_val, &right_val))),
                     TokenType::BangEqual => Ok(Literal::Boolean(!self.is_equal(&left_val, &right_val))),
+                    TokenType::And => self.logical_and(&left_val, &right_val, operator),
+                    TokenType::Or => self.logical_or(&left_val, &right_val, operator),
                     _ => Err(RuntimeError::Runtime(operator.clone(), "Invalid operator".into())),
                 }
             }
@@ -128,6 +130,56 @@ impl Interpreter {
                     Err(RuntimeError::Runtime(
                         keyword.clone(), 
                         format!("'{}' is not a function", keyword.lexeme).into()
+                    ))
+                }
+            }
+            Expr::Get { object, name } => {
+                let obj = self.evaluate(object)?;
+                if let Literal::InstanceValue(instance) = obj {
+                    instance.fields.get(&name.lexeme)
+                        .cloned()
+                        .ok_or_else(|| RuntimeError::Runtime(
+                            name.clone(),
+                            format!("Undefined property '{}'", name.lexeme)
+                        ))
+                } else {
+                    Err(RuntimeError::Runtime(
+                        name.clone(),
+                        "Only instances have properties".into()
+                    ))
+                }
+            }
+            // 变量赋值表达式
+            Expr::Assign { name, value } => {
+                let val = self.evaluate(value)?;
+                self.environment.assign(name, val.clone())?;
+                Ok(val)
+            }
+            Expr::Set { object, name, value } => {
+                let obj = self.evaluate(object)?;
+                let val = self.evaluate(value)?;
+                
+                if let Literal::InstanceValue(mut instance) = obj {
+                    instance.fields.insert(name.lexeme.clone(), val);
+                    Ok(Literal::InstanceValue(instance))
+                } else {
+                    Err(RuntimeError::Runtime(
+                        name.clone(),
+                        "Only instances can have fields".into()
+                    ))
+                }
+            }
+            Expr::This { keyword } => {
+                // 从当前环境获取this绑定
+                let this_value = self.environment.get(keyword)?;
+                
+                // 验证必须是实例类型
+                if let Literal::InstanceValue(instance) = this_value {
+                    Ok(Literal::InstanceValue(instance))
+                } else {
+                    Err(RuntimeError::Runtime(
+                        keyword.clone(),
+                        "Invalid 'this' context".into()
                     ))
                 }
             }
@@ -208,6 +260,30 @@ impl Interpreter {
             // 其他情况均为不相等
             _ => false
         }
+    }
+
+    fn as_bool(&self, val: &Literal, op: &Token) -> Result<bool> {
+        match val {
+            Literal::Boolean(b) => Ok(*b),
+            _ => Err(RuntimeError::Runtime(
+                op.clone(),
+                format!("Operand must be boolean (got {})", val.type_name())
+            ))
+        }
+    }
+    
+    // 逻辑与运算
+    fn logical_and(&self, a: &Literal, b: &Literal, op: &Token) -> Result<Literal> {
+        let a_bool = self.as_bool(a, op)?;
+        let b_bool = self.as_bool(b, op)?;
+        Ok(Literal::Boolean(a_bool && b_bool))
+    }
+    
+    // 逻辑或运算 
+    fn logical_or(&self, a: &Literal, b: &Literal, op: &Token) -> Result<Literal> {
+        let a_bool = self.as_bool(a, op)?;
+        let b_bool = self.as_bool(b, op)?;
+        Ok(Literal::Boolean(a_bool || b_bool))
     }
 
     fn compare<T>(&self, left: &Literal, right: &Literal, comp: T) -> Result<Literal>

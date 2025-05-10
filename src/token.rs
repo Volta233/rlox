@@ -65,6 +65,19 @@ impl Literal {
             None
         }
     }
+
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Literal::StringValue(_) => "string",
+            Literal::NumberValue(_) => "number",
+            Literal::Boolean(_) => "boolean",
+            Literal::Nil => "nil",
+            Literal::FunctionValue(_) => "function",
+            Literal::ClassValue(_) => "class",
+            Literal::InstanceValue(_) => "instance",
+            Literal::None => "none",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

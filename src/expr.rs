@@ -30,4 +30,22 @@ pub enum Expr {
         keyword: Token,      // super关键字token
         method: Token,       // 要调用的方法名
     },
+    Assign {
+        name: Token,        // 被赋值的目标
+        value: Box<Expr>,   // 赋值的表达式
+    },
+    Get {
+        object: Box<Expr>,  // 对象表达式（如obj.x中的obj）
+        name: Token,         // 属性名（如x）
+    },
+    // 属性赋值
+    Set {
+        object: Box<Expr>,
+        name: Token,
+        value: Box<Expr>,
+    },
+    // this表达式
+    This {
+        keyword: Token,
+    },
 }
