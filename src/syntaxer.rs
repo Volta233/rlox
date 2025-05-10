@@ -429,10 +429,16 @@ impl Parser {
     }
 
     fn peek(&self) -> &Token {
-        &self.tokens[self.current]
+        if self.current >= self.tokens.len() {
+            // 返回预先生成的EOF Token或最后一个Token
+            self.tokens.last().unwrap() 
+        } else {
+            &self.tokens[self.current]
+        }
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.tokens.len()
+        self.current >= self.tokens.len() || 
+        self.tokens.get(self.current).map_or(false, |t| t.token_type == TokenType::Eof)
     }
 }

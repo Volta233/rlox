@@ -1,11 +1,30 @@
 use std::collections::HashMap;
 use serde::Serialize;
 use crate::token::{Token, Literal};
+use std::fmt;
+use std::error::Error;
 
 #[derive(Debug)]
 pub enum RuntimeError {
     Return(Literal),  // 处理return语句
     Runtime(Token, String),  // (错误token, 错误信息)
+}
+
+// 实现 Display 提供错误描述
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            RuntimeError::Return(_) => write!(f, "Return statement correctly."),
+            RuntimeError::Runtime(token, msg) => 
+                write!(f, "[Line {}] Runtime Error: {}", token.line, msg),
+        }
+    }
+}
+
+impl Error for RuntimeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None // 如果不需要错误链可留空
+    }
 }
 
 type Result<T> = std::result::Result<T, RuntimeError>;
