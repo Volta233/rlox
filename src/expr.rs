@@ -22,8 +22,8 @@ pub enum Expr {
         name: Token,
     },
     Call {
-        callee: Box<Expr>,      // 被调用的函数表达式（如函数名）
-        paren: Token,           // 右括号token（用于错误定位）
+        callee: Box<Expr>,      // 被调用的函数表达式
+        paren: Token,           // 右括号token
         arguments: Vec<Expr>,    // 参数列表
     },
     Super {

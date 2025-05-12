@@ -242,7 +242,7 @@ impl Interpreter {
             // 布尔值严格比较
             (Literal::Boolean(a), Literal::Boolean(b)) => a == b,
             
-            // 数值比较（需考虑浮点精度问题）
+            // 数值比较
             (Literal::NumberValue(a), Literal::NumberValue(b)) => 
                 (a - b).abs() < f64::EPSILON,
             
@@ -253,7 +253,7 @@ impl Interpreter {
             (Literal::FunctionValue(a), Literal::FunctionValue(b)) => 
                 std::ptr::eq(a, b),
             
-            // 类比较（名称和内存地址双重校验）
+            // 类比较
             (Literal::ClassValue(a), Literal::ClassValue(b)) => 
                 a.name == b.name && std::ptr::eq(a, b),
             
@@ -455,7 +455,6 @@ impl Interpreter {
             Literal::Boolean(b) => b.to_string(),
             Literal::NumberValue(n) => format!("{}", n),
             Literal::StringValue(s) => s,
-            // 其他类型处理...
             Literal::FunctionValue(f) => format!("<fn {}>", 
                 match *f.declaration {
                     Stmt::Function { name, .. } => name.lexeme,
@@ -498,7 +497,7 @@ impl Interpreter {
         let result = self.execute_block(&body);
         self.environment = prev_env;
         result?; // 捕获可能抛出的 Return 错误
-        Ok(Literal::Nil) // 或从返回错误中提取值
+        Ok(Literal::Nil) 
     }
 
     fn call_class_constructor(
@@ -524,11 +523,11 @@ impl Interpreter {
                 ))
             };
 
-            // 步骤4：调用init方法（但不需要返回值）
+            // 步骤4：调用init方法
             let _ = self.call_function(&init_func, args)?;
         }
 
-        // 步骤5：返回实例（即使没有init方法）
+        // 步骤5：返回实例
         Ok(instance)
     }
 }

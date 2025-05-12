@@ -6,14 +6,14 @@ pub struct Scanner {
     current: usize,    // 当前扫描位置（绝对索引）
     start: usize,     // 当前词素起始位置
     line: usize,      // 当前行号
-    had_error: bool,  // 错误状态标记（新增）
+    had_error: bool,  // 错误状态标记
 }
 
 impl Scanner {
     /// 初始化扫描器
     pub fn new(source: &str) -> Self {
         let mut keywords = HashMap::new();
-        // 初始化所有保留字（新增 AND/OR/PRINT 等）
+        // 初始化所有保留字
         keywords.insert("and", TokenType::And);
         keywords.insert("class", TokenType::Class);
         keywords.insert("else", TokenType::Else);
@@ -98,27 +98,27 @@ impl Scanner {
                 }
             }
             
-            // 双字符操作符（新增错误位置信息）
+            // 双字符操作符
             '!' => self.make_dual_char_token('=', TokenType::BangEqual, TokenType::Bang),
             '=' => self.make_dual_char_token('=', TokenType::EqualEqual, TokenType::Equal),
             '<' => self.make_dual_char_token('=', TokenType::LessEqual, TokenType::Less),
             '>' => self.make_dual_char_token('=', TokenType::GreaterEqual, TokenType::Greater),
             
-            // 字符串字面量（新增转义字符处理）
+            // 字符串字面量
             '"' => self.scan_string(),
             
-            // 数字字面量（修改为存储 literal）
+            // 数字字面量
             c if c.is_ascii_digit() => self.scan_number(),
 
-            // 标识符/关键字（使用新关键字映射）
+            // 标识符/关键字
             c if c.is_ascii_alphabetic() || c == '_' => self.scan_identifier(),
 
-            // 未识别字符（增强错误信息）
+            // 未识别字符
             _ => self.error_token(&format!("Unexpected character '{}'", c)),
         }
     }
 
-    /// 扫描字符串字面量（新增转义处理）
+    /// 扫描字符串字面量
     fn scan_string(&mut self) -> Token {
         let mut value = String::new();
         let mut error = None;
@@ -156,7 +156,7 @@ impl Scanner {
         }
     }
 
-    /// 扫描数字字面量（存储为 Literal）
+    /// 扫描数字字面量
     fn scan_number(&mut self) -> Token {
         let mut is_float = false;
         while self.peek().is_ascii_digit() {
@@ -181,7 +181,7 @@ impl Scanner {
         }
     }
 
-    /// 统一标识符扫描方法（更名并优化关键字查找）
+    /// 统一标识符扫描方法
     fn scan_identifier(&mut self) -> Token {
         while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
             self.advance();
@@ -209,18 +209,18 @@ impl Scanner {
             "true" => TokenType::True,
             "var" => TokenType::Var,
             "while" => TokenType::While,
-            _ => TokenType::Identifier, // 注意这里改为无参数形式
+            _ => TokenType::Identifier, 
         };
         
         self.make_token(token_type)
     }
-    /// 创建带字面量的 token（新增方法）
+    /// 创建带字面量的 token
     fn make_token_with_literal(&self, token_type: TokenType, literal: Literal) -> Token {
         let lexeme = self.source[self.start..self.current].iter().collect();
         Token::new(token_type, self.line, lexeme, Some(literal))
     }
 
-    /// 处理双字符操作符（核心逻辑）
+    /// 处理双字符操作符
     fn make_dual_char_token(
         &mut self,
         expected: char,
@@ -294,7 +294,7 @@ impl Scanner {
         )
     }
 
-    /// 带错误信息的 token（新增行号）
+    /// 带错误信息的 token
     fn error_token(&mut self, message: &str) -> Token {
         self.had_error = true;
         Token::new(

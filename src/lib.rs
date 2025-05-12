@@ -68,7 +68,7 @@ macro_rules! assert_token {
 
 #[macro_export]
 macro_rules! test_error {
-    // 错误匹配（现在检查 lexeme 而不是 token_type 中的字符串）
+    // 错误匹配
     ($source:expr, $error_msg:expr) => {
         let mut scanner = Scanner::new($source);
         let token = scanner.scan_token();

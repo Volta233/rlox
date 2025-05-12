@@ -1,4 +1,4 @@
-use clap::Parser; // 这是 clap 的 Parser trait
+use clap::Parser; 
 use std::fs;
 use std::path::Path;
 use rlox::scanner::Scanner;
