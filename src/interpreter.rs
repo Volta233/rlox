@@ -81,7 +81,7 @@ impl Interpreter {
                 
                 // 3. 执行调用
                 match callee_val {
-                    Literal::FunctionValue(func) => self.call_function(&func, args),
+                    Literal::FunctionValue(func) => self.call_function(&func, args, paren),
                     Literal::ClassValue(cls) => self.call_class_constructor(&cls, args, paren),
                     _ => Err(RuntimeError::Runtime(
                         paren.clone(),
@@ -467,67 +467,90 @@ impl Interpreter {
         }
     }
 
-    fn call_function(&mut self, func: &LoxFunction, args: Vec<Literal>) -> Result<Literal> {
-        let (params, body) = match func.declaration.as_ref() {
-            Stmt::Function { params, body, .. } => (params, body),
+    // 修改call_function函数签名和逻辑
+// interpreter.rs中修改call_function函数
+fn call_function(
+    &mut self,
+    func: &LoxFunction,
+    args: Vec<Literal>,
+    paren: &Token,
+) -> Result<Literal> {
+    // 提取函数参数和body
+    let (params, body) = match func.declaration.as_ref() {
+        Stmt::Function { params, body, .. } => (params, body),
         _ => return Err(RuntimeError::Runtime(
-            Token::new( 
-                TokenType::Error,
-                0,
-                "".to_string(),
-                None
-            ), 
+            paren.clone(),
             "Invalid function declaration".into()
-        ))
+        )),
+    };
+
+    // 参数数量检查
+    if args.len() != params.len() {
+        return Err(RuntimeError::Runtime(
+            paren.clone(),
+            format!("Expected {} arguments but got {}", params.len(), args.len())
+        ));
+    }
+
+    // 创建闭包环境
+    let mut env = Environment::new(Some(Box::new((*func.closure).clone())));
+    
+    // 绑定参数
+    for (param, arg) in params.iter().zip(args) {
+        env.define(param.lexeme.clone(), arg);
+    }
+
+    // 执行函数体
+    let prev_env = self.environment.clone();
+    self.environment = Box::new(env);
+    
+    let result = self.execute_block(body); // 这里可以正确获取body
+    self.environment = prev_env;
+
+    // 处理返回值
+    match result {
+        Ok(()) => Ok(Literal::Nil),
+        Err(RuntimeError::Return(value)) => Ok(value),
+        Err(e) => Err(e),
+    }
+}
+
+    // 修改 interpreter.rs 中的 call_class_constructor 函数
+fn call_class_constructor(
+    &mut self,
+    cls: &LoxClass,
+    args: Vec<Literal>,
+    paren_token: &Token
+) -> Result<Literal> {
+    // 步骤1：创建实例
+    let instance = Literal::InstanceValue(LoxInstance {
+        class: cls.clone(),
+        fields: HashMap::new(),
+    });
+
+    // 步骤2：查找 init 方法
+    if let Some(init_method) = cls.find_method("init") {
+        // 步骤3：绑定 this 到闭包环境
+        let mut init_func = match init_method {
+            Literal::FunctionValue(f) => f.clone(),
+            _ => return Err(RuntimeError::Runtime(
+                paren_token.clone(),
+                "Invalid initializer".into()
+            ))
         };
-        
-        let mut env = Environment::new(
-            Some(Box::new((*func.closure).clone())) // 正确克隆闭包
-        );
-        
-        // 参数绑定
-        params.iter().zip(args).for_each(|(param, arg)| {
-            env.define(param.lexeme.clone(), arg);
-        });
-        
-        // 执行逻辑
-        let prev_env = self.environment.clone();
-        self.environment = Box::new(env);
-        
-        let result = self.execute_block(&body);
-        self.environment = prev_env;
-        result?; // 捕获可能抛出的 Return 错误
-        Ok(Literal::Nil) 
+
+        // 创建新环境并绑定 this
+        let mut closure = Environment::new(Some(init_func.closure.clone()));
+        closure.define("this".to_string(), instance.clone());
+
+        // 更新函数闭包
+        init_func.closure = Box::new(closure);
+
+        // 步骤4：调用 init 方法
+        self.call_function(&init_func, args, paren_token)?;
     }
 
-    fn call_class_constructor(
-        &mut self,
-        cls: &LoxClass,
-        args: Vec<Literal>,
-        paren_token: &Token
-    ) -> Result<Literal> {
-        // 步骤1：创建类实例
-        let instance = Literal::InstanceValue(LoxInstance {
-            class: cls.clone(),
-            fields: HashMap::new(),
-        });
-
-        // 步骤2：查找init方法
-        if let Some(init_method) = cls.find_method("init") {
-            // 步骤3：将实例绑定为this
-            let init_func = match init_method {
-                Literal::FunctionValue(f) => f,
-                _ => return Err(RuntimeError::Runtime(
-                    paren_token.clone(),
-                    "Invalid initializer".into()
-                ))
-            };
-
-            // 步骤4：调用init方法
-            let _ = self.call_function(&init_func, args)?;
-        }
-
-        // 步骤5：返回实例
-        Ok(instance)
-    }
+    // 步骤5：返回实例
+    Ok(instance)
+}
 }

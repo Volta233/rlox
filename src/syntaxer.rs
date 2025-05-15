@@ -383,52 +383,51 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<Expr, ParseError> {
-        if self.match_tokens(&[TokenType::Bang, TokenType::Minus]) {
-            let operator = self.previous().clone();
-            let right = self.unary()?;
-            return Ok(Expr::Unary {
-                operator,
-                right: Box::new(right),
-            });
-        }
-
-        self.primary()
+    if self.match_tokens(&[TokenType::Bang, TokenType::Minus]) {
+        let operator = self.previous().clone();
+        let right = self.unary()?;
+        Ok(Expr::Unary {
+            operator,
+            right: Box::new(right),
+        })
+    } else {
+        self.call() // 改为调用 call 而不是 primary
     }
+}
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
-        if self.match_token(TokenType::False) {
-            Ok(Expr::Literal { value: Literal::Boolean(false) })
-        } else if self.match_token(TokenType::True) {
-            Ok(Expr::Literal { value: Literal::Boolean(true) })
-        } else if self.match_token(TokenType::Nil) {
-            Ok(Expr::Literal { value: Literal::Nil })
-        } else if self.match_token(TokenType::Number) {
-            Ok(Expr::Literal { value: self.previous().literal.clone().unwrap() })
-        } else if self.match_token(TokenType::String) {
-            Ok(Expr::Literal { value: self.previous().literal.clone().unwrap() })
-        } else if self.match_token(TokenType::LeftParen) {
-            let expr = self.expression()?;
-            self.consume(TokenType::RightParen, "Expect ')' after expression")?;
-            Ok(Expr::Grouping { expression: Box::new(expr) })
-        } else if self.match_token(TokenType::Identifier) {
-            let name = self.previous().clone(); // 匹配后自动推进指针
-            Ok(Expr::Variable { name })
-        } else if self.match_token(TokenType::This) {
-            return Ok(Expr::This {
-                keyword: self.previous().clone(),
-            });
-        } else if self.match_token(TokenType::Super) {
-            let keyword = self.previous().clone();
-            self.consume(TokenType::Dot, "Expect '.' after 'super'")?;
-            let method = self.consume_identifier("Expect superclass method name")?;
-            return Ok(Expr::Super {
-                keyword,
-                method,
-            });
-        } else {
-            Err(self.error(&self.peek(), "Expect expression"))
-        }
+    if self.match_token(TokenType::False) {
+        Ok(Expr::Literal { value: Literal::Boolean(false) })
+    } else if self.match_token(TokenType::True) {
+        Ok(Expr::Literal { value: Literal::Boolean(true) })
+    } else if self.match_token(TokenType::Nil) {
+        Ok(Expr::Literal { value: Literal::Nil })
+    } else if self.match_token(TokenType::Number) {
+        Ok(Expr::Literal { value: self.previous().literal.clone().unwrap() })
+    } else if self.match_token(TokenType::String) {
+        Ok(Expr::Literal { value: self.previous().literal.clone().unwrap() })
+    } else if self.match_token(TokenType::LeftParen) {
+        let expr = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after expression")?;
+        Ok(Expr::Grouping { expression: Box::new(expr) })
+    } else if self.match_token(TokenType::Identifier) {
+        Ok(Expr::Variable { name: self.previous().clone() })
+    } else if self.match_token(TokenType::This) {
+        Ok(Expr::This {
+            keyword: self.previous().clone(),
+        })
+    } else if self.match_token(TokenType::Super) {
+        let keyword = self.previous().clone();
+        self.consume(TokenType::Dot, "Expect '.' after 'super'")?;
+        let method = self.consume_identifier("Expect superclass method name")?;
+        Ok(Expr::Super {
+            keyword,
+            method,
+        })
+    } else {
+        Err(self.error(&self.peek(), "Expect expression"))
     }
+}
 
     // --------------- 工具方法 ---------------
     fn match_token(&mut self, ttype: TokenType) -> bool {
@@ -449,13 +448,14 @@ impl Parser {
         }
     }
 
-    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<(), ParseError> {
-        if self.check(ttype) {
-            self.advance();
-            Ok(())
-        } else {
-            Err(self.error(&self.peek(), message))
-        }
+    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token, ParseError> {
+    if self.check(ttype) {
+        let token = self.peek().clone();
+        self.advance();
+        Ok(token)
+    } else {
+        Err(self.error(&self.peek(), message))
+    }
     }
 
     fn consume_identifier(&mut self, msg: &str) -> Result<Token, ParseError> {
@@ -517,4 +517,48 @@ impl Parser {
         self.current >= self.tokens.len() || 
         self.tokens.get(self.current).map_or(false, |t| t.token_type == TokenType::Eof)
     }
+
+    fn call(&mut self) -> Result<Expr, ParseError> {
+    let mut expr = self.primary()?;
+
+    loop {
+        if self.match_token(TokenType::LeftParen) {
+            expr = self.finish_call(expr)?;
+        } else if self.match_token(TokenType::Dot) {
+            let name = self.consume_identifier("Expect property name after '.'")?;
+            expr = Expr::Get {
+                object: Box::new(expr),
+                name,
+            };
+        } else {
+            break;
+        }
+    }
+
+    Ok(expr)
+}
+
+fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+    let mut arguments = Vec::new();
+    if !self.check(TokenType::RightParen) {
+        loop {
+            if arguments.len() >= 255 {
+                return Err(self.error(&self.peek(), "Can't have more than 255 arguments"));
+            }
+            arguments.push(self.expression()?);
+            if !self.match_token(TokenType::Comma) {
+                break;
+            }
+        }
+    }
+
+    // 这里会返回Token
+    let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments")?;
+    
+    Ok(Expr::Call {
+        callee: Box::new(callee),
+        paren, // 现在类型正确
+        arguments,
+    })
+}
 }

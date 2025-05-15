@@ -1,4 +1,24 @@
-fun square(n) {
-    return n * n;
+class Counter {
+  init() {
+    this.count = 0;
+  }
+
+  inc() {
+    this.count = this.count + 1;
+  }
+
+  get() {
+    return this.count;
+  }
 }
-print square(4); 
+
+var c = Counter();
+c.init();
+
+var i = 0;
+while (i < 3) {
+  if (i != 1) c.inc();
+  i = i + 1;
+}
+
+print c.get();
