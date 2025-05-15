@@ -11,7 +11,21 @@ pub struct Interpreter {
     environment: Box<Environment>, // 当前作用域
 }
 
+
+
+
 impl Interpreter {
+    fn get_call_name(&self, expr: &Expr) -> String {
+    match expr {
+        Expr::Get { name, .. } => name.lexeme.clone(),
+        _ => String::new()
+    }
+}
+    fn evaluate_args(&mut self, exprs: &[Expr]) -> Result<Vec<Literal>> { // 移除显式错误类型
+    exprs.iter()
+        .map(|expr| self.evaluate(expr))
+        .collect()
+    }
     pub fn new() -> Self {
         let globals = Environment::new(None);
         // 预定义全局函数（如clock）
@@ -70,25 +84,37 @@ impl Interpreter {
             }
             // 其他表达式类型...
             Expr::Call { callee, paren, arguments } => {
-                // 1. 解析被调用对象
-                let callee_val = self.evaluate(callee)?;
+            let callee_val = self.evaluate(callee)?;
+            let args = self.evaluate_args(arguments)?;
+            
+            match callee_val {
+                Literal::FunctionValue(func) => self.call_function(&func, args, paren),
+                Literal::ClassValue(cls) => {
+                // 类实例化调用
+                let instance = self.call_class_constructor(&cls, args, paren)?;
                 
-                // 2. 解析参数列表
-                let mut args = Vec::new();
-                for arg in arguments {
-                    args.push(self.evaluate(arg)?);
+                // 使用引用模式匹配
+                if let Literal::InstanceValue(ref inst) = instance {
+                    if let Some(init) = inst.class.find_method("init") {
+                        // 传递实例引用
+                        self.call_method(inst, init, vec![], paren)?;
+                    }
                 }
                 
-                // 3. 执行调用
-                match callee_val {
-                    Literal::FunctionValue(func) => self.call_function(&func, args, paren),
-                    Literal::ClassValue(cls) => self.call_class_constructor(&cls, args, paren),
-                    _ => Err(RuntimeError::Runtime(
-                        paren.clone(),
-                        "Can only call functions and classes".into()
-                    )),
-                }
+                Ok(instance)
+            },
+                // 处理实例方法调用
+        Literal::InstanceValue(inst) => {
+            // 通过实例的类查找方法
+            if let Some(method) = inst.class.find_method(&self.get_call_name(callee)) {
+                self.call_method(&inst, method, args, paren)
+            } else {
+                Err(RuntimeError::Runtime(paren.clone(), "Undefined method".into()))
             }
+        },
+                _ => Err(RuntimeError::Runtime(paren.clone(), "Can only call functions and classes".into()))
+            }
+        }
             Expr::Super { keyword, method } => {
                 // 步骤1：获取超类引用
                 let super_class = match self.environment.get(keyword)? {
@@ -186,6 +212,29 @@ impl Interpreter {
         }
     }
 
+    fn call_method(
+    &mut self,
+    instance: &LoxInstance,
+    method: Literal,
+    args: Vec<Literal>,
+    paren: &Token,
+) -> Result<Literal> {
+    if let Literal::FunctionValue(func) = method {
+        // 创建新的闭包环境
+        let mut closure = (*func.closure).clone();
+        closure.define("this".into(), Literal::InstanceValue(instance.clone()));
+        
+        // 创建绑定实例后的函数
+        let bound_func = LoxFunction {
+            declaration: func.declaration,
+            closure: Box::new(closure),
+        };
+        
+        self.call_function(&bound_func, args, paren)
+    } else {
+        Err(RuntimeError::Runtime(paren.clone(), "Invalid method".into()))
+    }
+}
      fn is_truthy(&self, val: &Literal) -> bool {
         match val {
             Literal::Nil => false,
@@ -400,30 +449,31 @@ impl Interpreter {
             }
             
             Stmt::Class { name, superclass, methods } => {
-                // 处理继承关系
-                let superclass_literal = match superclass {
-                    Some(expr) => self.evaluate(expr)?,
-                    None => Literal::None
-                };
-                
-                let superclass = match superclass_literal {
-                    Literal::ClassValue(c) => Some(Box::new(c)), 
-                    _ => return Err(RuntimeError::Runtime(
-                        name.clone(),
-                        "Superclass must be a class".into()
-                    ))
-                };
-                
-                let class = LoxClass {
-                    name: name.lexeme.clone(),
-                    methods: methods.iter().map(|m| m.clone()).collect(),
-                    superclass,
-                    closure: Box::new(self.environment.deep_clone()), // 新增closure初始化
-                };
-                
-                self.environment.define(name.lexeme.clone(), Literal::ClassValue(class));
-                Ok(())
-            }
+            // 解析超类（如果有）
+            let super_class = match superclass {
+                Some(expr) => {
+                    let val = self.evaluate(expr)?;
+                    match val {
+                        Literal::ClassValue(c) => Some(Box::new(c)),
+                        _ => return Err(RuntimeError::Runtime(
+                            name.clone(),
+                            "Superclass must be a class".into()
+                        ))
+                    }
+                }
+                None => None
+            };
+
+            let class = LoxClass {
+                name: name.lexeme.clone(),
+                methods: methods.clone(),
+                superclass: super_class,
+                closure: Box::new(self.environment.deep_clone()),
+            };
+            
+            self.environment.define(name.lexeme.clone(), Literal::ClassValue(class));
+            Ok(())
+        }
             
             Stmt::Return { keyword:_, value } => {
                 let return_value = match value {
@@ -515,42 +565,31 @@ fn call_function(
     }
 }
 
-    // 修改 interpreter.rs 中的 call_class_constructor 函数
 fn call_class_constructor(
     &mut self,
     cls: &LoxClass,
     args: Vec<Literal>,
-    paren_token: &Token
+    paren: &Token,
 ) -> Result<Literal> {
-    // 步骤1：创建实例
+    // 直接使用已解析的类定义
     let instance = Literal::InstanceValue(LoxInstance {
         class: cls.clone(),
         fields: HashMap::new(),
     });
 
-    // 步骤2：查找 init 方法
-    if let Some(init_method) = cls.find_method("init") {
-        // 步骤3：绑定 this 到闭包环境
-        let mut init_func = match init_method {
-            Literal::FunctionValue(f) => f.clone(),
-            _ => return Err(RuntimeError::Runtime(
-                paren_token.clone(),
-                "Invalid initializer".into()
-            ))
+    // 绑定 this 到闭包环境
+    let mut init_closure = (*cls.closure).clone();
+    init_closure.define("this".into(), instance.clone());
+
+    // 自动调用 init 方法
+    if let Some(Literal::FunctionValue(init_method)) = cls.find_method("init") {
+        let bound_init = LoxFunction {
+            declaration: init_method.declaration.clone(),
+            closure: Box::new(init_closure),
         };
-
-        // 创建新环境并绑定 this
-        let mut closure = Environment::new(Some(init_func.closure.clone()));
-        closure.define("this".to_string(), instance.clone());
-
-        // 更新函数闭包
-        init_func.closure = Box::new(closure);
-
-        // 步骤4：调用 init 方法
-        self.call_function(&init_func, args, paren_token)?;
+        self.call_function(&bound_init, args, paren)?;
     }
 
-    // 步骤5：返回实例
     Ok(instance)
 }
 }

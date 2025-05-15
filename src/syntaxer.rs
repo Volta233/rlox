@@ -62,25 +62,32 @@ impl Parser {
 
     // --------------- 类声明 ---------------
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
-        let name = self.consume_identifier("Expect class name")?;
+    let name = self.consume_identifier("Expect class name")?;
 
-        let superclass = if self.match_token(TokenType::Less) {
-            let super_token = self.consume_identifier("Expect superclass name")?;
-            Some(Expr::Variable { name: super_token })
-        } else {
-            None
-        };
-
-        self.consume(TokenType::LeftBrace, "Expect '{' before class body")?;
-
-        let mut methods = Vec::new();
-        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
-            methods.push(self.function("method")?);
-        }
-
-        self.consume(TokenType::RightBrace, "Expect '}' after class body")?;
-        Ok(Stmt::Class { name, superclass, methods })
+    // 修复超类解析逻辑
+    let mut super_expr = None;
+    if self.match_token(TokenType::Less) {
+        self.consume_identifier("Expect superclass name")?;
+        super_expr = Some(Expr::Variable { 
+            name: self.previous().clone() 
+        });
     }
+
+    self.consume(TokenType::LeftBrace, "Expect '{' before class body")?;
+
+    let mut methods = Vec::new();
+    while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+        methods.push(self.function("method")?);
+    }
+
+    self.consume(TokenType::RightBrace, "Expect '}' after class body")?;
+    
+    Ok(Stmt::Class {
+        name,
+        superclass: super_expr.map(|e| Box::new(e)),
+        methods,
+    })
+}
 
     // --------------- 函数声明 ---------------
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
