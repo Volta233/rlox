@@ -11,12 +11,14 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
+
     fn get_call_name(&self, expr: &Expr) -> String {
         match expr {
             Expr::GetAttribute { name, .. } => name.lexeme.clone(),
             _ => String::new(),
         }
     }
+
     fn evaluate_args(&mut self, exprs: &[Expr]) -> Result<Vec<Literal>> {
         // 移除显式错误类型
         exprs.iter().map(|expr| self.evaluate(expr)).collect()
@@ -31,14 +33,17 @@ impl Interpreter {
         }
     }
 
+    // 主控流程，解释每一个表达式
     pub fn interpret(&mut self, statements: &[Stmt]) -> Result<()> {
         for stmt in statements {
             self.execute(stmt)?;
+
+            // DEBUG1
+            // self.debug_print_env();
         }
         Ok(())
     }
 
-    // 后续实现 execute 和 evaluate 方法
     fn evaluate(&mut self, expr: &Expr) -> Result<Literal> {
         match expr {
             Expr::Literal { value } => Ok(value.clone()),
@@ -166,7 +171,6 @@ impl Interpreter {
                 if let Literal::FunctionValue(mut func) = method {
                     // 克隆原闭包环境
                     let mut closure = (*func.closure).clone();
-
                     // 注入 this 实例
                     closure.define("this".into(), Literal::InstanceValue(this_instance));
                     func.closure = Box::new(closure);
@@ -243,32 +247,7 @@ impl Interpreter {
         }
     }
 
-    fn call_method(
-        &mut self,
-        instance: &LoxInstance,
-        method: Literal,
-        args: Vec<Literal>,
-        paren: &Token,
-    ) -> Result<Literal> {
-        if let Literal::FunctionValue(func) = method {
-            // 创建新的闭包环境
-            let mut closure = (*func.closure).clone();
-            closure.define("this".into(), Literal::InstanceValue(instance.clone()));
 
-            // 创建绑定实例后的函数
-            let bound_func = LoxFunction {
-                declaration: func.declaration,
-                closure: Box::new(closure),
-            };
-
-            self.call_function(&bound_func, args, paren)
-        } else {
-            Err(RuntimeError::Runtime(
-                paren.clone(),
-                "Invalid method".into(),
-            ))
-        }
-    }
     fn is_truthy(&self, val: &Literal) -> bool {
         match val {
             Literal::Nil => false,
@@ -557,33 +536,18 @@ impl Interpreter {
         result
     }
 
-    fn stringify(&self, value: Literal) -> String {
-        match value {
-            Literal::Nil => "nil".into(),
-            Literal::Boolean(b) => b.to_string(),
-            Literal::NumberValue(n) => format!("{}", n),
-            Literal::StringValue(s) => s,
-            Literal::FunctionValue(f) => format!(
-                "<fn {}>",
-                match *f.declaration {
-                    Stmt::Function { name, .. } => name.lexeme,
-                    _ => "anonymous".into(),
-                }
-            ),
-            Literal::ClassValue(c) => format!("<class {}>", c.name),
-            Literal::InstanceValue(i) => format!("<instance of {}>", i.class.name),
-            Literal::None => "nil".into(), // 合并None和Nil处理
-        }
-    }
 
-    // 修改call_function函数签名和逻辑
-    // interpreter.rs中修改call_function函数
+    // 调用函数时使用
     fn call_function(
         &mut self,
         func: &LoxFunction,
         args: Vec<Literal>,
         paren: &Token,
     ) -> Result<Literal> {
+        // DEBUG2: 打印闭包环境中的变量
+        println!("[DEBUG] Function closure environment:");
+        func.closure.debug_print(0);
+
         // 提取函数参数和body
         let (params, body) = match func.declaration.as_ref() {
             Stmt::Function { params, body, .. } => (params, body),
@@ -604,7 +568,8 @@ impl Interpreter {
         }
 
         // 创建闭包环境
-        let mut env = Environment::new(Some(Box::new((*func.closure).clone())));
+        // let mut env = Environment::new(Some(Box::new((*func.closure).clone())));
+        let mut env = Environment::new(Some(func.closure.clone()));
 
         // 绑定参数
         for (param, arg) in params.iter().zip(args) {
@@ -626,6 +591,34 @@ impl Interpreter {
         }
     }
 
+    fn call_method(
+        &mut self,
+        instance: &LoxInstance,
+        method: Literal,
+        args: Vec<Literal>,
+        paren: &Token,
+    ) -> Result<Literal> {
+        if let Literal::FunctionValue(func) = method {
+            // 创建新闭包环境并绑定 this
+            let mut closure = Environment::new(Some(self.environment.clone()));
+            closure.define("this".into(), Literal::InstanceValue(instance.clone()));
+            
+             // 创建新函数，使用绑定后的闭包
+            let bound_func = LoxFunction {
+                declaration: func.declaration,
+                closure: Box::new(closure),
+            };
+            let result = self.call_function(&bound_func, args, paren) ;// 传入新闭包
+            
+            result
+        } else {
+            Err(RuntimeError::Runtime(
+                paren.clone(),
+                "Invalid method".into(),
+            ))
+        }
+    }
+    // 新建一个实例时调用
     fn call_class_constructor(
         &mut self,
         cls: &LoxClass,
@@ -637,6 +630,11 @@ impl Interpreter {
             class: cls.clone(),
             fields: HashMap::new(),
         });
+
+        // DEBUG 打印新建实例的初始字段
+        // if let Literal::InstanceValue(ref inst) = instance {
+        //     inst.debug_print_fields(); // 此时应输出空字段
+        // }
 
         // 绑定 this 到闭包环境
         let mut init_closure = (*cls.closure).clone();
@@ -651,6 +649,34 @@ impl Interpreter {
             self.call_function(&bound_init, args, paren)?;
         }
 
+        // DEBUG
+        // if let Literal::InstanceValue(ref inst) = instance {
+        //     inst.debug_print_fields(); 
+        // }
+
         Ok(instance)
+    }
+
+    pub fn debug_print_env(&self) {
+        self.environment.debug_print(0);
+    }
+
+    fn stringify(&self, value: Literal) -> String {
+        match value {
+            Literal::Nil => "nil".into(),
+            Literal::Boolean(b) => b.to_string(),
+            Literal::NumberValue(n) => format!("{}", n),
+            Literal::StringValue(s) => s,
+            Literal::FunctionValue(f) => format!(
+                "<fn {}>",
+                match *f.declaration {
+                    Stmt::Function { name, .. } => name.lexeme,
+                    _ => "anonymous".into(),
+                }
+            ),
+            Literal::ClassValue(c) => format!("<class {}>", c.name),
+            Literal::InstanceValue(i) => format!("<instance of {}>", i.class.name),
+            Literal::None => "nil".into(), // 合并None和Nil处理
+        }
     }
 }

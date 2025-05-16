@@ -85,6 +85,18 @@ pub struct LoxInstance {
     pub fields: HashMap<String, Literal>,
 }
 
+impl LoxInstance {
+    pub fn debug_print_fields(&self){
+        if self.fields.is_empty() {
+            println!("[DEBUG] Instance fields: (empty)");
+        } else {
+            for (k, v) in &self.fields {
+                println!("[DEBUG] Field '{}': {:?}", k, v);
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub enum Literal {
     StringValue(String),

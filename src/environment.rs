@@ -81,4 +81,41 @@ impl Environment {
             enclosing: self.enclosing.as_ref().map(|e| Box::new(e.deep_clone())),
         }
     }
+
+     /// 检查当前环境链中是否存在 "this" 绑定
+    pub fn has_this(&self) -> bool {
+        // 检查当前环境
+        if self.values.contains_key("this") {
+            return true;
+        }
+
+        // 递归检查父环境
+        if let Some(enclosing) = &self.enclosing {
+            enclosing.has_this()
+        } else {
+            false
+        }
+    }
+
+    /// 调试函数：检查当前环境链是否有 "this" 绑定
+    pub fn check_this_binding(&self, msg : String) {
+        let has_this = self.has_this();
+        if !has_this {
+            println!("[DEBUG] Current environment has no 'this' binding: ");
+        }else{
+            println!(
+                "[DEBUG] Current environment has 'this' binding: {}", msg
+            );
+        }
+    }
+
+    pub fn debug_print(&self, depth: usize) {
+        println!("[DEBUG] Environment Depth {}:", depth);
+        for (key, val) in &self.values {
+            println!("[DEBUG]  {}: {:?}", key, val);
+        }
+        if let Some(enclosing) = &self.enclosing {
+            enclosing.debug_print(depth + 1);
+        }
+    }
 }
