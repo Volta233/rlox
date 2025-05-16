@@ -54,7 +54,12 @@ impl Environment {
         } else if let Some(env) = &self.enclosing {
             env.get(name)
         } else {
-            Err(RuntimeError::Runtime(name.clone(), format!("Undefined variable '{}'", key)))
+            // 特殊处理this关键字
+            if key == "this" {
+                Err(RuntimeError::Runtime(name.clone(), "Invalid 'this' context".into()))
+            } else {
+                Err(RuntimeError::Runtime(name.clone(), format!("Undefined variable '{}'", key)))
+            }
         }
     }
 

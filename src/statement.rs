@@ -21,7 +21,7 @@ pub enum Stmt {
     },
     Class {
         name: Token,
-        superclass: Option<Expr>,
+        superclass: Option<Box<Expr>>, // 修改为Box包装
         methods: Vec<Stmt>,
     },
     If {

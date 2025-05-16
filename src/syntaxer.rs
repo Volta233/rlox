@@ -1,8 +1,8 @@
-use crate::token::{Token, TokenType, Literal};
 use crate::expr::Expr;
 use crate::statement::Stmt;
-use std::fmt;
+use crate::token::{Literal, Token, TokenType};
 use std::error::Error;
+use std::fmt;
 
 // ------------------- 错误处理结构 -------------------
 #[derive(Debug)]
@@ -17,7 +17,7 @@ impl fmt::Display for ParseError {
     }
 }
 
-impl Error for ParseError {}  // 实现 Error trait
+impl Error for ParseError {} // 实现 Error trait
 
 // ------------------- 语法分析器主体 -------------------
 pub struct Parser {
@@ -27,10 +27,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { 
-            tokens,
-            current: 0 
-        }
+        Self { tokens, current: 0 }
     }
 
     // 主解析方法
@@ -64,12 +61,14 @@ impl Parser {
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume_identifier("Expect class name")?;
 
-        let superclass = if self.match_token(TokenType::Less) {
-            let super_token = self.consume_identifier("Expect superclass name")?;
-            Some(Expr::Variable { name: super_token })
-        } else {
-            None
-        };
+        // 修复超类解析逻辑
+        let mut super_expr = None;
+        if self.match_token(TokenType::Less) {
+            self.consume_identifier("Expect superclass name")?;
+            super_expr = Some(Expr::Variable {
+                name: self.previous().clone(),
+            });
+        }
 
         self.consume(TokenType::LeftBrace, "Expect '{' before class body")?;
 
@@ -79,13 +78,21 @@ impl Parser {
         }
 
         self.consume(TokenType::RightBrace, "Expect '}' after class body")?;
-        Ok(Stmt::Class { name, superclass, methods })
+
+        Ok(Stmt::Class {
+            name,
+            superclass: super_expr.map(|e| Box::new(e)),
+            methods,
+        })
     }
 
     // --------------- 函数声明 ---------------
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
         let name = self.consume_identifier(&format!("Expect {} name", kind))?;
-        self.consume(TokenType::LeftParen, &format!("Expect '(' after {} name", kind))?;
+        self.consume(
+            TokenType::LeftParen,
+            &format!("Expect '(' after {} name", kind),
+        )?;
 
         let mut params = Vec::new();
         if !self.check(TokenType::RightParen) {
@@ -101,8 +108,11 @@ impl Parser {
         }
 
         self.consume(TokenType::RightParen, "Expect ')' after parameters")?;
-        self.consume(TokenType::LeftBrace, &format!("Expect '{{' before {} body", kind))?;
-        
+        self.consume(
+            TokenType::LeftBrace,
+            &format!("Expect '{{' before {} body", kind),
+        )?;
+
         let body = self.block_statement()?;
         Ok(Stmt::Function { name, params, body })
     }
@@ -117,7 +127,10 @@ impl Parser {
             None
         };
 
-        self.consume(TokenType::Semicolon, "Expect ';' after variable declaration")?;
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration",
+        )?;
         Ok(Stmt::VarDecl { name, initializer })
     }
 
@@ -134,7 +147,9 @@ impl Parser {
         } else if self.match_token(TokenType::While) {
             self.while_statement()
         } else if self.match_token(TokenType::LeftBrace) {
-            Ok(Stmt::Block { statements: self.block_statement()? })
+            Ok(Stmt::Block {
+                statements: self.block_statement()?,
+            })
         } else {
             self.expression_statement()
         }
@@ -182,7 +197,9 @@ impl Parser {
         };
 
         Ok(if let Some(init) = initializer {
-            Stmt::Block { statements: vec![init, while_loop] }
+            Stmt::Block {
+                statements: vec![init, while_loop],
+            }
         } else {
             while_loop
         })
@@ -211,7 +228,11 @@ impl Parser {
             None
         };
 
-        Ok(Stmt::If { condition, then_branch, else_branch })
+        Ok(Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
     // --------------- 表达式语句 ---------------
@@ -256,34 +277,34 @@ impl Parser {
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {
         let expr = self.logic_or()?;
-    
-    // 处理对象属性赋值 obj.x = 5
-    if self.match_token(TokenType::Equal) {
-        let equals = self.previous().clone();
-        let value = self.assignment()?;
-        
-        if let Expr::Variable { name } = expr {
-            return Ok(Expr::Assign {
-                name,
-                value: Box::new(value),
-            });
-        } else if let Expr::Get { object, name } = expr {
-            return Ok(Expr::Set {
-                object,
-                name,
-                value: Box::new(value),
-            });
+
+        // 处理对象属性赋值 obj.x = 5
+        if self.match_token(TokenType::Equal) {
+            let equals = self.previous().clone();
+            let value = self.assignment()?;
+
+            if let Expr::Variable { name } = expr {
+                return Ok(Expr::Assign {
+                    name,
+                    value: Box::new(value),
+                });
+            } else if let Expr::Get { object, name } = expr {
+                return Ok(Expr::Set {
+                    object,
+                    name,
+                    value: Box::new(value),
+                });
+            }
+
+            return Err(self.error(&equals, "Invalid assignment target"));
         }
-        
-        return Err(self.error(&equals, "Invalid assignment target"));
-    }
-    
-    Ok(expr)
+
+        Ok(expr)
     }
 
     fn logic_or(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.logic_and()?;
-    
+
         while self.match_token(TokenType::Or) {
             let operator = self.previous().clone();
             let right = self.logic_and()?;
@@ -293,13 +314,13 @@ impl Parser {
                 right: Box::new(right),
             };
         }
-    
+
         Ok(expr)
     }
-    
+
     fn logic_and(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.equality()?;
-    
+
         while self.match_token(TokenType::And) {
             let operator = self.previous().clone();
             let right = self.equality()?;
@@ -309,10 +330,10 @@ impl Parser {
                 right: Box::new(right),
             };
         }
-    
+
         Ok(expr)
     }
-    
+
     fn equality(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.comparison()?;
 
@@ -386,45 +407,55 @@ impl Parser {
         if self.match_tokens(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
-            return Ok(Expr::Unary {
+            Ok(Expr::Unary {
                 operator,
                 right: Box::new(right),
-            });
+            })
+        } else {
+            self.call() // 改为调用 call 而不是 primary
         }
-
-        self.primary()
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_token(TokenType::False) {
-            Ok(Expr::Literal { value: Literal::Boolean(false) })
+            Ok(Expr::Literal {
+                value: Literal::Boolean(false),
+            })
         } else if self.match_token(TokenType::True) {
-            Ok(Expr::Literal { value: Literal::Boolean(true) })
+            Ok(Expr::Literal {
+                value: Literal::Boolean(true),
+            })
         } else if self.match_token(TokenType::Nil) {
-            Ok(Expr::Literal { value: Literal::Nil })
+            Ok(Expr::Literal {
+                value: Literal::Nil,
+            })
         } else if self.match_token(TokenType::Number) {
-            Ok(Expr::Literal { value: self.previous().literal.clone().unwrap() })
+            Ok(Expr::Literal {
+                value: self.previous().literal.clone().unwrap(),
+            })
         } else if self.match_token(TokenType::String) {
-            Ok(Expr::Literal { value: self.previous().literal.clone().unwrap() })
+            Ok(Expr::Literal {
+                value: self.previous().literal.clone().unwrap(),
+            })
         } else if self.match_token(TokenType::LeftParen) {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "Expect ')' after expression")?;
-            Ok(Expr::Grouping { expression: Box::new(expr) })
+            Ok(Expr::Grouping {
+                expression: Box::new(expr),
+            })
         } else if self.match_token(TokenType::Identifier) {
-            let name = self.previous().clone(); // 匹配后自动推进指针
-            Ok(Expr::Variable { name })
+            Ok(Expr::Variable {
+                name: self.previous().clone(),
+            })
         } else if self.match_token(TokenType::This) {
-            return Ok(Expr::This {
+            Ok(Expr::This {
                 keyword: self.previous().clone(),
-            });
+            })
         } else if self.match_token(TokenType::Super) {
             let keyword = self.previous().clone();
             self.consume(TokenType::Dot, "Expect '.' after 'super'")?;
             let method = self.consume_identifier("Expect superclass method name")?;
-            return Ok(Expr::Super {
-                keyword,
-                method,
-            });
+            Ok(Expr::Super { keyword, method })
         } else {
             Err(self.error(&self.peek(), "Expect expression"))
         }
@@ -444,15 +475,16 @@ impl Parser {
         if ttypes.iter().any(|t| self.check(t.clone())) {
             self.advance();
             true
-        } else{
+        } else {
             false
         }
     }
 
-    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<(), ParseError> {
+    fn consume(&mut self, ttype: TokenType, message: &str) -> Result<Token, ParseError> {
         if self.check(ttype) {
+            let token = self.peek().clone();
             self.advance();
-            Ok(())
+            Ok(token)
         } else {
             Err(self.error(&self.peek(), message))
         }
@@ -461,7 +493,7 @@ impl Parser {
     fn consume_identifier(&mut self, msg: &str) -> Result<Token, ParseError> {
         if self.check(TokenType::Identifier) {
             let token = self.peek().clone();
-            self.advance();  // 消耗标识符后推进指针
+            self.advance(); // 消耗标识符后推进指针
             Ok(token)
         } else {
             Err(self.error(&self.peek(), msg))
@@ -482,9 +514,14 @@ impl Parser {
                 return;
             }
             match self.peek().token_type {
-                TokenType::Class | TokenType::Fun | TokenType::Var
-                | TokenType::For | TokenType::If | TokenType::While
-                | TokenType::Print | TokenType::Return => return,
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
                 _ => self.advance(),
             }
         }
@@ -507,14 +544,61 @@ impl Parser {
     fn peek(&self) -> &Token {
         if self.current >= self.tokens.len() {
             // 返回预先生成的EOF Token或最后一个Token
-            self.tokens.last().unwrap() 
+            self.tokens.last().unwrap()
         } else {
             &self.tokens[self.current]
         }
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.tokens.len() || 
-        self.tokens.get(self.current).map_or(false, |t| t.token_type == TokenType::Eof)
+        self.current >= self.tokens.len()
+            || self
+                .tokens
+                .get(self.current)
+                .map_or(false, |t| t.token_type == TokenType::Eof)
+    }
+
+    fn call(&mut self) -> Result<Expr, ParseError> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.match_token(TokenType::LeftParen) {
+                expr = self.finish_call(expr)?;
+            } else if self.match_token(TokenType::Dot) {
+                let name = self.consume_identifier("Expect property name after '.'")?;
+                expr = Expr::Get {
+                    object: Box::new(expr),
+                    name,
+                };
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseError> {
+        let mut arguments = Vec::new();
+        if !self.check(TokenType::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    return Err(self.error(&self.peek(), "Can't have more than 255 arguments"));
+                }
+                arguments.push(self.expression()?);
+                if !self.match_token(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+
+        // 这里会返回Token
+        let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments")?;
+
+        Ok(Expr::Call {
+            callee: Box::new(callee),
+            paren, // 现在类型正确
+            arguments,
+        })
     }
 }
