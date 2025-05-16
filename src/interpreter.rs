@@ -13,7 +13,7 @@ pub struct Interpreter {
 impl Interpreter {
     fn get_call_name(&self, expr: &Expr) -> String {
         match expr {
-            Expr::Get { name, .. } => name.lexeme.clone(),
+            Expr::GetAttribute { name, .. } => name.lexeme.clone(),
             _ => String::new(),
         }
     }
@@ -180,15 +180,21 @@ impl Interpreter {
                     ))
                 }
             }
-            Expr::Get { object, name } => {
+            Expr::GetAttribute { object, name } => {
                 let obj = self.evaluate(object)?;
                 if let Literal::InstanceValue(instance) = obj {
-                    instance.fields.get(&name.lexeme).cloned().ok_or_else(|| {
-                        RuntimeError::Runtime(
-                            name.clone(),
-                            format!("Undefined property '{}'", name.lexeme),
-                        )
-                    })
+                    // 先尝试查找方法
+                    if let Some(method) = instance.class.find_method(&name.lexeme) {
+                        Ok(method)
+                    } else {
+                        // 再查找字段
+                        instance.fields.get(&name.lexeme).cloned().ok_or_else(|| {
+                            RuntimeError::Runtime(
+                                name.clone(),
+                                format!("Undefined property '{}'", name.lexeme),
+                            )
+                        })
+                    }
                 } else {
                     Err(RuntimeError::Runtime(
                         name.clone(),

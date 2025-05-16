@@ -26,6 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             let lex_path = Path::new("output").join("lex_result.json");
             fs::write(lex_path, serde_json::to_string_pretty(&tokens_clone)?)?;
+            println!("finish lexeme scanner.");
 
             let mut parser = SyntaxParser::new(tokens);
             let ast = match parser.parse() {
@@ -35,9 +36,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             
             let ast_path = Path::new("output").join("ast_result.json");
             fs::write(ast_path, serde_json::to_string_pretty(&ast)?)?;
+            println!("finish parser.");
+
             let mut my_interpreter = Interpreter::new();
             my_interpreter.interpret(&ast)
                     .map_err(|e| Box::new(e) as Box<dyn Error>)?;
+            println!("finish interpreter.");
             Ok(())  // 整个函数成功返回
         }
         Err(errors) => {

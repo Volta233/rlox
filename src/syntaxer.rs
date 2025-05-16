@@ -288,7 +288,7 @@ impl Parser {
                     name,
                     value: Box::new(value),
                 });
-            } else if let Expr::Get { object, name } = expr {
+            } else if let Expr::GetAttribute { object, name } = expr {
                 return Ok(Expr::Set {
                     object,
                     name,
@@ -566,7 +566,7 @@ impl Parser {
                 expr = self.finish_call(expr)?;
             } else if self.match_token(TokenType::Dot) {
                 let name = self.consume_identifier("Expect property name after '.'")?;
-                expr = Expr::Get {
+                expr = Expr::GetAttribute {
                     object: Box::new(expr),
                     name,
                 };
