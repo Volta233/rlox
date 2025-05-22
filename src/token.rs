@@ -1,7 +1,8 @@
 use serde::Serialize;
 use crate::statement::Stmt;
 use crate::environment::Environment;
-
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoxFunction {
@@ -70,7 +71,7 @@ impl LoxFunction {
 #[derive(Debug, Clone, Serialize)]
 pub struct LoxInstance {
     pub class: LoxClass,
-    pub environment: Environment, // 存储字段和继承的方法
+    pub environment: Rc<RefCell<Environment>>, // 使用Rc和RefCell共享环境
 }
 
 #[derive(Debug, Clone, Serialize)]

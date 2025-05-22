@@ -2,6 +2,8 @@ use crate::environment::{Environment, RuntimeError};
 use crate::expr::Expr;
 use crate::statement::Stmt;
 use crate::token::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -38,7 +40,7 @@ impl Interpreter {
             self.execute(stmt)?;
 
             // DEBUG
-            self.debug_print_env();
+            // self.debug_print_env();
 
         }
         Ok(())
@@ -175,7 +177,7 @@ impl Interpreter {
                 let obj = self.evaluate(object)?;
                 if let Literal::InstanceValue(instance) = obj {
                     // 首先尝试获取字段
-                    match instance.environment.get(name) {
+                    match instance.environment.borrow_mut().get(name) {
                         Ok(field) => Ok(field),
                         Err(_) => {
                             // 字段不存在则查找方法
@@ -203,8 +205,8 @@ impl Interpreter {
                 let obj = self.evaluate(object)?;
                 let val = self.evaluate(value)?;
 
-                if let Literal::InstanceValue(mut instance) = obj {
-                    instance.environment.define(name.lexeme.clone(), val.clone());
+                if let Literal::InstanceValue(instance) = obj {
+                    instance.environment.borrow_mut().define(name.lexeme.clone(), val.clone());
                     Ok(Literal::InstanceValue(instance))
                 } else {
                     Err(RuntimeError::Runtime(
@@ -215,9 +217,9 @@ impl Interpreter {
             }
             Expr::This { keyword } => {
                 // 从当前环境获取this绑定
-                println!("[DEBUG] flag1 for this");
+                // println!("[DEBUG] flag1 for this");
                 let this_value = self.environment.get(keyword)?;
-                println!("[DEBUG] flag2 for this");
+                // println!("[DEBUG] flag2 for this");
 
                 // 验证必须是实例类型
                 if let Literal::InstanceValue(instance) = this_value {
@@ -565,16 +567,15 @@ impl Interpreter {
         let result = self.execute_block(&func.body);
         self.environment = prev_env;
 
-        // 处理初始化方法返回值
+         // 初始化方法不依赖返回值
         if func.is_initializer {
-            println!("[DEBUG] flag3 for this");
-            return Ok(self.environment.get( &Token::this())?);
-        }
-
-        match result {
-            Ok(_) => Ok(Literal::Nil),
-            Err(RuntimeError::Return(value)) => Ok(value),
-            Err(e) => Err(e),
+            Ok(Literal::Nil) // 返回值被call_class_constructor忽略
+        } else {
+            match result {
+                Ok(_) => Ok(Literal::Nil),
+                Err(RuntimeError::Return(value)) => Ok(value),
+                Err(e) => Err(e),
+            }
         }
     }
 
@@ -589,7 +590,7 @@ impl Interpreter {
         let instance_env = Environment::new(Some(Box::new(cls.environment.clone())));
         let instance = LoxInstance {
             class: cls.clone(),
-            environment: instance_env,
+            environment: Rc::new(RefCell::new(instance_env)),
         };
 
         // 自动调用初始化方法
@@ -597,7 +598,7 @@ impl Interpreter {
             let bound_init = init.bind(&instance);
             self.call_function(&bound_init, args, paren)?;
         }
-        println!("[DEBUG] flag4 for this");
+        // println!("[DEBUG] flag4 for this");
         Ok(Literal::InstanceValue(instance))
     }
 
