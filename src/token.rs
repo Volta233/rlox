@@ -1,60 +1,46 @@
 use serde::Serialize;
-use std::collections::HashMap;
 use crate::statement::Stmt;
 use crate::environment::Environment;
 
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoxFunction {
-    pub declaration: Box<Stmt>, // 使用Box包装语句
-    pub closure: Box<Environment>, // 使用Box包装环境
+    pub params: Vec<Token>,      // 参数列表
+    pub body: Vec<Stmt>,         // 函数体
+    pub closure: Box<Environment>, // 闭包环境
+    pub is_initializer: bool,    // 是否是初始化方法
 }
 
 #[derive(Debug, Serialize)]
 pub struct LoxClass {
     pub name: String,
-    pub methods: Vec<Stmt>,
+    pub environment: Environment, // 方法存储在环境中
     pub superclass: Option<Box<LoxClass>>,
-    #[serde(skip)]
-    pub closure: Box<Environment>,
 }
 
-// 手动实现 Clone（不能使用 derive 因为 Environment 需要深度克隆）
 impl Clone for LoxClass {
     fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
-            methods: self.methods.clone(),
+            environment: self.environment.deep_clone(),
             superclass: self.superclass.clone(),
-            closure: Box::new((*self.closure).clone()), 
         }
     }
 }
 
-
 impl LoxClass {
     pub fn find_method(&self, name: &str) -> Option<Literal> {
-        // 在当前类中查找
-        for method in &self.methods {
-            if let Stmt::Function { name: method_name, .. } = method {
-                if method_name.lexeme == name {
-                    return Some(Literal::FunctionValue(LoxFunction {
-                        declaration: Box::new(method.clone()),
-                        closure: self.closure.clone(),
-                    }));
-                }
+        // 在当前类环境查找
+        match self.environment.get(&Token::new_identifier(name.to_string())) {
+            Ok(Literal::FunctionValue(func)) => Some(Literal::FunctionValue(func)),
+            Ok(_) => None,
+            Err(_) => {
+                // 递归查找超类链
+                self.superclass.as_ref().and_then(|s| s.find_method(name))
             }
         }
-
-        // 查找超类链
-        if let Some(ref superclass) = self.superclass {
-            return superclass.find_method(name);
-        }
-
-        None
     }
 
-    // 新增方法用于检查是否是某类的子类
     pub fn is_subclass_of(&self, other: &LoxClass) -> bool {
         if let Some(ref superclass) = self.superclass {
             if superclass.name == other.name {
@@ -73,8 +59,10 @@ impl LoxFunction {
         closure.define("this".into(), Literal::InstanceValue(instance.clone()));
         
         LoxFunction {
-            declaration: self.declaration.clone(),
+            params: self.params.clone(),
+            body: self.body.clone(),
             closure: Box::new(closure),
+            is_initializer: self.is_initializer,
         }
     }
 }
@@ -82,19 +70,11 @@ impl LoxFunction {
 #[derive(Debug, Clone, Serialize)]
 pub struct LoxInstance {
     pub class: LoxClass,
-    pub fields: HashMap<String, Literal>,
+    pub environment: Environment, // 存储字段和继承的方法
 }
 
 impl LoxInstance {
-    pub fn debug_print_fields(&self){
-        if self.fields.is_empty() {
-            println!("[DEBUG] Instance fields: (empty)");
-        } else {
-            for (k, v) in &self.fields {
-                println!("[DEBUG] Field '{}': {:?}", k, v);
-            }
-        }
-    }
+
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -223,6 +203,15 @@ impl Token {
             line: 0,
             lexeme: "this".into(),
             literal: None,
+        }
+    }
+
+    pub fn new_identifier(name: String) -> Self {
+        Self {
+            token_type: TokenType::Identifier,
+            line: 0, // 实际使用时应传入正确的行号
+            lexeme: name.clone(),
+            literal: Some(Literal::StringValue(name)),
         }
     }
 }

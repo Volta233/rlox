@@ -2,7 +2,6 @@ use crate::environment::{Environment, RuntimeError};
 use crate::expr::Expr;
 use crate::statement::Stmt;
 use crate::token::*;
-use std::collections::HashMap;
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -38,8 +37,6 @@ impl Interpreter {
         for stmt in statements {
             self.execute(stmt)?;
 
-            // DEBUG1
-            // self.debug_print_env();
         }
         Ok(())
     }
@@ -105,28 +102,20 @@ impl Interpreter {
                 match callee_val {
                     Literal::FunctionValue(func) => self.call_function(&func, args, paren),
                     Literal::ClassValue(cls) => {
-                        // 类实例化调用
+                        // 类实例化调用（call_class_constructor内部已处理init方法）
                         let instance = self.call_class_constructor(&cls, args, paren)?;
-
-                        // 使用引用模式匹配
-                        if let Literal::InstanceValue(ref inst) = instance {
-                            if let Some(init) = inst.class.find_method("init") {
-                                // 传递实例引用
-                                self.call_method(inst, init, vec![], paren)?;
-                            }
-                        }
-
                         Ok(instance)
                     }
                     // 处理实例方法调用
                     Literal::InstanceValue(inst) => {
-                        // 通过实例的类查找方法
-                        if let Some(method) = inst.class.find_method(&self.get_call_name(callee)) {
-                            self.call_method(&inst, method, args, paren)
+                        let method_name = self.get_call_name(callee);
+                        if let Some(Literal::FunctionValue(func)) = inst.class.find_method(&method_name) {
+                            let bound_func = func.bind(&inst);
+                            self.call_function(&bound_func, args, paren)
                         } else {
                             Err(RuntimeError::Runtime(
                                 paren.clone(),
-                                "Undefined method".into(),
+                                format!("Undefined method '{}'", method_name),
                             ))
                         }
                     }
@@ -168,14 +157,9 @@ impl Interpreter {
                 })?;
 
                 // 步骤4：创建闭包环境（绑定this）
-                if let Literal::FunctionValue(mut func) = method {
-                    // 克隆原闭包环境
-                    let mut closure = (*func.closure).clone();
-                    // 注入 this 实例
-                    closure.define("this".into(), Literal::InstanceValue(this_instance));
-                    func.closure = Box::new(closure);
-
-                    Ok(Literal::FunctionValue(func))
+                if let Literal::FunctionValue(func) = method {
+                    let bound_func = func.bind(&this_instance);
+                    Ok(Literal::FunctionValue(bound_func))
                 } else {
                     // 使用调用方法时的方法名 Token 来构建错误
                     Err(RuntimeError::Runtime(
@@ -187,22 +171,18 @@ impl Interpreter {
             Expr::GetAttribute { object, name } => {
                 let obj = self.evaluate(object)?;
                 if let Literal::InstanceValue(instance) = obj {
-                    // 先尝试查找方法
-                    if let Some(method) = instance.class.find_method(&name.lexeme) {
-                        Ok(method)
-                    } else {
-                        // 再查找字段
-                        instance.fields.get(&name.lexeme).cloned().ok_or_else(|| {
-                            RuntimeError::Runtime(
-                                name.clone(),
-                                format!("Undefined property '{}'", name.lexeme),
-                            )
-                        })
+                    // 首先尝试获取字段
+                    match instance.environment.get(name) {
+                        Ok(field) => Ok(field),
+                        Err(_) => {
+                            // 字段不存在则查找方法
+                            instance.class.environment.get(name)
+                        }
                     }
                 } else {
                     Err(RuntimeError::Runtime(
                         name.clone(),
-                        "Only instances have properties".into(),
+                        "Only instances have attributes".into(),
                     ))
                 }
             }
@@ -221,7 +201,7 @@ impl Interpreter {
                 let val = self.evaluate(value)?;
 
                 if let Literal::InstanceValue(mut instance) = obj {
-                    instance.fields.insert(name.lexeme.clone(), val);
+                    instance.environment.define(name.lexeme.clone(), val.clone());
                     Ok(Literal::InstanceValue(instance))
                 } else {
                     Err(RuntimeError::Runtime(
@@ -466,16 +446,16 @@ impl Interpreter {
             }
             Stmt::Function {
                 name,
-                params: _,
-                body: _,
+                params,
+                body,
             } => {
-                // 将函数存储为环境中的可调用对象
-                let function = LoxFunction {
-                    declaration: Box::new(stmt.clone()), // 必须显式装箱
+                 let function = LoxFunction {
+                    params: params.clone(),
+                    body: body.clone(),
                     closure: Box::new(self.environment.deep_clone()),
+                    is_initializer: false, // 普通函数不是构造器
                 };
-                self.environment
-                    .define(name.lexeme.clone(), Literal::FunctionValue(function));
+                self.environment.define(name.lexeme.clone(), Literal::FunctionValue(function));
                 Ok(())
             }
 
@@ -484,7 +464,7 @@ impl Interpreter {
                 superclass,
                 methods,
             } => {
-                // 解析超类（如果有）
+                // 解析超类
                 let super_class = match superclass {
                     Some(expr) => {
                         let val = self.evaluate(expr)?;
@@ -501,15 +481,38 @@ impl Interpreter {
                     None => None,
                 };
 
+                // 创建类环境（继承当前环境）
+                let mut class_env = Environment::new(Some(self.environment.clone()));
+
+                // 将方法转换为函数值存入环境
+                for method in methods {
+                    if let Stmt::Function {
+                        name: method_name,
+                        params,
+                        body,
+                    } = method
+                    {
+                        let func = LoxFunction {
+                            params: params.clone(),
+                            body: body.clone(),
+                            closure: Box::new(class_env.deep_clone()),
+                            is_initializer: method_name.lexeme == "init",
+                        };
+                        class_env.define(
+                            method_name.lexeme.clone(),
+                            Literal::FunctionValue(func),
+                        );
+                    }
+                }
+
+                // 创建类对象
                 let class = LoxClass {
                     name: name.lexeme.clone(),
-                    methods: methods.clone(),
+                    environment: class_env,
                     superclass: super_class,
-                    closure: Box::new(self.environment.deep_clone()),
                 };
 
-                self.environment
-                    .define(name.lexeme.clone(), Literal::ClassValue(class));
+                self.environment.define(name.lexeme.clone(), Literal::ClassValue(class));
                 Ok(())
             }
 
@@ -542,82 +545,33 @@ impl Interpreter {
         &mut self,
         func: &LoxFunction,
         args: Vec<Literal>,
-        paren: &Token,
+        _: &Token,
     ) -> Result<Literal> {
-        // DEBUG2: 打印闭包环境中的变量
-        println!("[DEBUG] Function closure environment:");
-        func.closure.debug_print(0);
-
-        // 提取函数参数和body
-        let (params, body) = match func.declaration.as_ref() {
-            Stmt::Function { params, body, .. } => (params, body),
-            _ => {
-                return Err(RuntimeError::Runtime(
-                    paren.clone(),
-                    "Invalid function declaration".into(),
-                ));
-            }
-        };
-
-        // 参数数量检查
-        if args.len() != params.len() {
-            return Err(RuntimeError::Runtime(
-                paren.clone(),
-                format!("Expected {} arguments but got {}", params.len(), args.len()),
-            ));
-        }
-
-        // 创建闭包环境
-        // let mut env = Environment::new(Some(Box::new((*func.closure).clone())));
-        let mut env = Environment::new(Some(func.closure.clone()));
+        // 创建新的调用环境（继承函数闭包）
+        let mut call_env = Environment::new(Some(func.closure.clone()));
 
         // 绑定参数
-        for (param, arg) in params.iter().zip(args) {
-            env.define(param.lexeme.clone(), arg);
+        for (param, arg) in func.params.iter().zip(args.iter()) {
+            call_env.define(param.lexeme.clone(), arg.clone());
         }
 
         // 执行函数体
-        let prev_env = self.environment.clone();
-        self.environment = Box::new(env);
-
-        let result = self.execute_block(body); // 这里可以正确获取body
+        let prev_env = std::mem::replace(&mut self.environment, Box::new(call_env));
+        let result = self.execute_block(&func.body);
         self.environment = prev_env;
 
-        // 处理返回值
+        // 处理初始化方法返回值
+        if func.is_initializer {
+            return Ok(self.environment.get( &Token::this())?);
+        }
+
         match result {
-            Ok(()) => Ok(Literal::Nil),
+            Ok(_) => Ok(Literal::Nil),
             Err(RuntimeError::Return(value)) => Ok(value),
             Err(e) => Err(e),
         }
     }
 
-    fn call_method(
-        &mut self,
-        instance: &LoxInstance,
-        method: Literal,
-        args: Vec<Literal>,
-        paren: &Token,
-    ) -> Result<Literal> {
-        if let Literal::FunctionValue(func) = method {
-            // 创建新闭包环境并绑定 this
-            let mut closure = Environment::new(Some(self.environment.clone()));
-            closure.define("this".into(), Literal::InstanceValue(instance.clone()));
-            
-             // 创建新函数，使用绑定后的闭包
-            let bound_func = LoxFunction {
-                declaration: func.declaration,
-                closure: Box::new(closure),
-            };
-            let result = self.call_function(&bound_func, args, paren) ;// 传入新闭包
-            
-            result
-        } else {
-            Err(RuntimeError::Runtime(
-                paren.clone(),
-                "Invalid method".into(),
-            ))
-        }
-    }
     // 新建一个实例时调用
     fn call_class_constructor(
         &mut self,
@@ -625,36 +579,20 @@ impl Interpreter {
         args: Vec<Literal>,
         paren: &Token,
     ) -> Result<Literal> {
-        // 直接使用已解析的类定义
-        let instance = Literal::InstanceValue(LoxInstance {
+        // 创建实例环境，继承类环境
+        let instance_env = Environment::new(Some(Box::new(cls.environment.clone())));
+        let instance = LoxInstance {
             class: cls.clone(),
-            fields: HashMap::new(),
-        });
+            environment: instance_env,
+        };
 
-        // DEBUG 打印新建实例的初始字段
-        // if let Literal::InstanceValue(ref inst) = instance {
-        //     inst.debug_print_fields(); // 此时应输出空字段
-        // }
-
-        // 绑定 this 到闭包环境
-        let mut init_closure = (*cls.closure).clone();
-        init_closure.define("this".into(), instance.clone());
-
-        // 自动调用 init 方法
-        if let Some(Literal::FunctionValue(init_method)) = cls.find_method("init") {
-            let bound_init = LoxFunction {
-                declaration: init_method.declaration.clone(),
-                closure: Box::new(init_closure),
-            };
+        // 自动调用初始化方法
+        if let Some(Literal::FunctionValue(init)) = cls.find_method("init") {
+            let bound_init = init.bind(&instance);
             self.call_function(&bound_init, args, paren)?;
         }
 
-        // DEBUG
-        // if let Literal::InstanceValue(ref inst) = instance {
-        //     inst.debug_print_fields(); 
-        // }
-
-        Ok(instance)
+        Ok(Literal::InstanceValue(instance))
     }
 
     pub fn debug_print_env(&self) {
@@ -667,13 +605,7 @@ impl Interpreter {
             Literal::Boolean(b) => b.to_string(),
             Literal::NumberValue(n) => format!("{}", n),
             Literal::StringValue(s) => s,
-            Literal::FunctionValue(f) => format!(
-                "<fn {}>",
-                match *f.declaration {
-                    Stmt::Function { name, .. } => name.lexeme,
-                    _ => "anonymous".into(),
-                }
-            ),
+            Literal::FunctionValue(_) => "call fn".into(),
             Literal::ClassValue(c) => format!("<class {}>", c.name),
             Literal::InstanceValue(i) => format!("<instance of {}>", i.class.name),
             Literal::None => "nil".into(), // 合并None和Nil处理
