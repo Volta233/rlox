@@ -55,7 +55,7 @@ impl LoxClass {
 // 为方法调用添加辅助方法
 impl LoxFunction {
     pub fn bind(&self, instance: &LoxInstance) -> Self {
-        let mut closure = (*self.closure).clone();
+        let mut closure = (*self.closure).deep_clone();
         closure.define("this".into(), Literal::InstanceValue(instance.clone()));
         
         LoxFunction {
@@ -71,10 +71,6 @@ impl LoxFunction {
 pub struct LoxInstance {
     pub class: LoxClass,
     pub environment: Environment, // 存储字段和继承的方法
-}
-
-impl LoxInstance {
-
 }
 
 #[derive(Debug, Clone, Serialize)]

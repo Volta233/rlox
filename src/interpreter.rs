@@ -37,6 +37,9 @@ impl Interpreter {
         for stmt in statements {
             self.execute(stmt)?;
 
+            // DEBUG
+            self.debug_print_env();
+
         }
         Ok(())
     }
@@ -212,7 +215,9 @@ impl Interpreter {
             }
             Expr::This { keyword } => {
                 // 从当前环境获取this绑定
+                println!("[DEBUG] flag1 for this");
                 let this_value = self.environment.get(keyword)?;
+                println!("[DEBUG] flag2 for this");
 
                 // 验证必须是实例类型
                 if let Literal::InstanceValue(instance) = this_value {
@@ -562,6 +567,7 @@ impl Interpreter {
 
         // 处理初始化方法返回值
         if func.is_initializer {
+            println!("[DEBUG] flag3 for this");
             return Ok(self.environment.get( &Token::this())?);
         }
 
@@ -591,7 +597,7 @@ impl Interpreter {
             let bound_init = init.bind(&instance);
             self.call_function(&bound_init, args, paren)?;
         }
-
+        println!("[DEBUG] flag4 for this");
         Ok(Literal::InstanceValue(instance))
     }
 

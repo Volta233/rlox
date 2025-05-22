@@ -56,7 +56,7 @@ impl Environment {
         } else {
             // 特殊处理this关键字
             if key == "this" {
-                Err(RuntimeError::Runtime(name.clone(), "Invalid 'this' context".into()))
+                Err(RuntimeError::Runtime(name.clone(), "this isn't bound in environment".into()))
             } else {
                 Err(RuntimeError::Runtime(name.clone(), format!("Undefined variable '{}'", key)))
             }
