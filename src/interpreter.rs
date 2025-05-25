@@ -116,6 +116,7 @@ impl Interpreter {
                     // 处理实例方法调用
                     Literal::InstanceValue(inst) => {
                         let method_name = self.get_call_name(callee);
+                        println!("[DEBUG] call method with name {}", method_name);
                         if let Some(Literal::FunctionValue(func)) = inst.class.find_method(&method_name) {
                             let bound_func = func.bind(&inst);
                             self.call_function(&bound_func, args, paren)
@@ -183,6 +184,7 @@ impl Interpreter {
                         Ok(field) => Ok(field),
                         Err(_) => {
                             // 字段不存在则查找方法
+                            println!("[DEBUG] Get Method {} of {}", name.lexeme, instance.name);
                             instance.class.environment.get(name)
                         }
                     }
@@ -557,7 +559,7 @@ impl Interpreter {
     ) -> Result<Literal> {
         // 创建新的调用环境（继承函数闭包）
         let mut call_env = Environment::new(Some(func.closure.clone()));
-        
+
         // 检查父环境是否包含 `this`
         if let Some(parent) = &call_env.enclosing {
             parent.check_this_binding("Parent of call_env in call_function".into());
@@ -608,7 +610,6 @@ impl Interpreter {
             let bound_init = init.bind(&instance);
             self.call_function(&bound_init, args, paren)?;
         }
-        // println!("[DEBUG] flag4 for this");
         Ok(Literal::InstanceValue(instance))
     }
 
