@@ -31,6 +31,9 @@ impl Clone for LoxClass {
 
 impl LoxClass {
     pub fn find_method(&self, name: &str) -> Option<Literal> {
+        if let Ok(Literal::FunctionValue(func)) = self.environment.get(&Token::new_identifier(name.to_string())) {
+            func.closure.check_this_binding("Found method in class".to_string());
+        }
         // 在当前类环境查找
         match self.environment.get(&Token::new_identifier(name.to_string())) {
             Ok(Literal::FunctionValue(func)) => Some(Literal::FunctionValue(func)),
@@ -58,6 +61,8 @@ impl LoxFunction {
     pub fn bind(&self, instance: &LoxInstance) -> Self {
         let mut closure = (*self.closure).deep_clone();
         closure.define("this".into(), Literal::InstanceValue(instance.clone()));
+        // 检查闭包环境是否包含this
+        closure.check_this_binding("After binding in LoxFunction::bind".to_string());
         
         LoxFunction {
             params: self.params.clone(),
@@ -72,6 +77,7 @@ impl LoxFunction {
 pub struct LoxInstance {
     pub class: LoxClass,
     pub environment: Rc<RefCell<Environment>>, // 使用Rc和RefCell共享环境
+    pub name: String, // 新增 name 字段
 }
 
 #[derive(Debug, Clone, Serialize)]

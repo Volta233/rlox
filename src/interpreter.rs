@@ -9,6 +9,7 @@ type Result<T> = std::result::Result<T, RuntimeError>;
 
 pub struct Interpreter {
     environment: Box<Environment>, // 当前作用域
+    instance_counter: usize, // 新增实例计数器
 }
 
 impl Interpreter {
@@ -31,6 +32,7 @@ impl Interpreter {
         env.define("clock".to_string(), Literal::NumberValue(0.0)); // 占位符
         Self {
             environment: Box::new(env),
+            instance_counter: 0,
         }
     }
 
@@ -217,9 +219,8 @@ impl Interpreter {
             }
             Expr::This { keyword } => {
                 // 从当前环境获取this绑定
-                // println!("[DEBUG] flag1 for this");
+                self.environment.check_this_binding(format!("Checking 'this' at line {}", keyword.line));
                 let this_value = self.environment.get(keyword)?;
-                // println!("[DEBUG] flag2 for this");
 
                 // 验证必须是实例类型
                 if let Literal::InstanceValue(instance) = this_value {
@@ -556,6 +557,12 @@ impl Interpreter {
     ) -> Result<Literal> {
         // 创建新的调用环境（继承函数闭包）
         let mut call_env = Environment::new(Some(func.closure.clone()));
+        
+        // 检查父环境是否包含 `this`
+        if let Some(parent) = &call_env.enclosing {
+            parent.check_this_binding("Parent of call_env in call_function".into());
+        }
+        func.closure.check_this_binding("Before calling function".to_string());
 
         // 绑定参数
         for (param, arg) in func.params.iter().zip(args.iter()) {
@@ -588,9 +595,12 @@ impl Interpreter {
     ) -> Result<Literal> {
         // 创建实例环境，继承类环境
         let instance_env = Environment::new(Some(Box::new(cls.environment.clone())));
+        let instance_name = format!("{}#{}", cls.name, self.instance_counter);
+        self.instance_counter += 1;
         let instance = LoxInstance {
             class: cls.clone(),
             environment: Rc::new(RefCell::new(instance_env)),
+            name: instance_name,
         };
 
         // 自动调用初始化方法
