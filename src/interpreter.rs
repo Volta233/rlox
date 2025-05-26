@@ -179,13 +179,20 @@ impl Interpreter {
             Expr::GetAttribute { object, name } => {
                 let obj = self.evaluate(object)?;
                 if let Literal::InstanceValue(instance) = obj {
-                    // 首先尝试获取字段
+                    // 尝试获取字段
                     match instance.environment.borrow_mut().get(name) {
                         Ok(field) => Ok(field),
                         Err(_) => {
-                            // 字段不存在则查找方法
-                            println!("[DEBUG] Get Method {} of {}", name.lexeme, instance.name);
-                            instance.class.environment.get(name)
+                            // 字段不存在，查找方法并绑定实例
+                            if let Some(Literal::FunctionValue(func)) = instance.class.find_method(&name.lexeme) {
+                                let bound_func = func.bind(&instance);
+                                Ok(Literal::FunctionValue(bound_func))
+                            } else {
+                                Err(RuntimeError::Runtime(
+                                    name.clone(),
+                                    format!("Undefined property '{}'", name.lexeme),
+                                ))
+                            }
                         }
                     }
                 } else {
@@ -595,8 +602,8 @@ impl Interpreter {
         args: Vec<Literal>,
         paren: &Token,
     ) -> Result<Literal> {
-        // 创建实例环境，继承类环境
-        let instance_env = Environment::new(Some(Box::new(cls.environment.clone())));
+        // 创建实例环境，不再继承类的环境
+        let instance_env = Environment::new(None); // 修改此处
         let instance_name = format!("{}#{}", cls.name, self.instance_counter);
         self.instance_counter += 1;
         let instance = LoxInstance {
