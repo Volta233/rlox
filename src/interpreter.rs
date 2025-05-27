@@ -4,6 +4,7 @@ use crate::statement::Stmt;
 use crate::token::*;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -29,7 +30,26 @@ impl Interpreter {
     pub fn new() -> Self {
         // 预定义全局函数（如clock）
         let mut env = Environment::new(None);
-        env.define("clock".to_string(), Literal::NumberValue(0.0)); // 占位符
+        // 定义 clock 函数（返回自 Unix 纪元以来的秒数）
+        env.define("clock".to_string(), Literal::NativeFunctionValue(|args| {
+            // 参数检查
+            if !args.is_empty() {
+                return Err(RuntimeError::Runtime(
+                    Token::new_identifier("clock".to_string()),
+                    format!("Expected 0 arguments, got {}", args.len()),
+                ));
+            }
+            
+            // 计算当前时间
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| RuntimeError::Runtime(
+                    Token::new_identifier("clock".to_string()),
+                    "SystemTime error".to_string(),
+                ))?;
+            Ok(Literal::NumberValue(now.as_secs_f64()))
+        }));
+
         Self {
             environment: Box::new(env),
             instance_counter: 0,
@@ -116,7 +136,7 @@ impl Interpreter {
                     // 处理实例方法调用
                     Literal::InstanceValue(inst) => {
                         let method_name = self.get_call_name(callee);
-                        println!("[DEBUG] call method with name {}", method_name);
+                        // println!("[DEBUG] call method with name {}", method_name);
                         if let Some(Literal::FunctionValue(func)) = inst.class.find_method(&method_name) {
                             let bound_func = func.bind(&inst);
                             self.call_function(&bound_func, args, paren)
@@ -126,6 +146,10 @@ impl Interpreter {
                                 format!("Undefined method '{}'", method_name),
                             ))
                         }
+                    }
+                    Literal::NativeFunctionValue(func) => {
+                        // 调用原生函数
+                        func(&args)
                     }
                     _ => Err(RuntimeError::Runtime(
                         paren.clone(),
@@ -228,7 +252,7 @@ impl Interpreter {
             }
             Expr::This { keyword } => {
                 // 从当前环境获取this绑定
-                self.environment.check_this_binding(format!("Checking 'this' at line {}", keyword.line));
+                // self.environment.check_this_binding(format!("Checking 'this' at line {}", keyword.line));
                 let this_value = self.environment.get(keyword)?;
 
                 // 验证必须是实例类型
@@ -568,10 +592,10 @@ impl Interpreter {
         let mut call_env = Environment::new(Some(func.closure.clone()));
 
         // 检查父环境是否包含 `this`
-        if let Some(parent) = &call_env.enclosing {
-            parent.check_this_binding("Parent of call_env in call_function".into());
-        }
-        func.closure.check_this_binding("Before calling function".to_string());
+        // if let Some(parent) = &call_env.enclosing {
+        //     parent.check_this_binding("Parent of call_env in call_function".into());
+        // }
+        // func.closure.check_this_binding("Before calling function".to_string());
 
         // 绑定参数
         for (param, arg) in func.params.iter().zip(args.iter()) {
@@ -634,6 +658,7 @@ impl Interpreter {
             Literal::ClassValue(c) => format!("<class {}>", c.name),
             Literal::InstanceValue(i) => format!("<instance of {}>", i.class.name),
             Literal::None => "nil".into(), // 合并None和Nil处理
+            Literal::NativeFunctionValue(_) => "call native fn".into(),
         }
     }
 }
