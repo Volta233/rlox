@@ -7,7 +7,7 @@ use std::error::Error;
 #[derive(Debug)]
 pub enum RuntimeError {
     Return(Literal),  // 处理return语句
-    Runtime(Token, String),  // (错误token, 错误信息)
+    Runtime(String),  // (错误token, 错误信息)
 }
 
 // 实现 Display 提供错误描述
@@ -15,8 +15,8 @@ impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             RuntimeError::Return(_) => write!(f, "Return statement correctly."),
-            RuntimeError::Runtime(token, msg) => 
-                write!(f, "[Line {}] Runtime Error: {}", token.line, msg),
+            RuntimeError::Runtime(msg) => 
+                write!(f, "Runtime Error: {}", msg),
         }
     }
 }
@@ -56,9 +56,9 @@ impl Environment {
         } else {
             // 特殊处理this关键字
             if key == "this" {
-                Err(RuntimeError::Runtime(name.clone(), "this isn't bound in environment".into()))
+                Err(RuntimeError::Runtime("this isn't bound in environment".into()))
             } else {
-                Err(RuntimeError::Runtime(name.clone(), format!("Undefined variable '{}'", key)))
+                Err(RuntimeError::Runtime(format!("Undefined variable '{}'", key)))
             }
         }
     }
@@ -71,7 +71,7 @@ impl Environment {
         } else if let Some(env) = &mut self.enclosing {
             env.assign(name, value)
         } else {
-            Err(RuntimeError::Runtime(name.clone(), format!("Undefined variable '{}'", key)))
+            Err(RuntimeError::Runtime(format!("Undefined variable '{}'", key)))
         }
     }
 

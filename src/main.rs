@@ -1,6 +1,5 @@
 use clap::Parser; 
 use std::fs;
-use std::path::Path;
 use rlox::scanner::Scanner;
 use rlox::syntaxer::Parser as SyntaxParser; // 重命名语法分析器
 use rlox::interpreter::Interpreter;
@@ -36,9 +35,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
 
     // 保存词法分析结果
-    let lex_path = Path::new("output").join("lex_result.json");
-    fs::write(lex_path, serde_json::to_string_pretty(&tokens)?)?;
-    println!("[DEBUG] finish lexeme scanner.");
+    // let lex_path = Path::new("output").join("lex_result.json");
+    // fs::write(lex_path, serde_json::to_string_pretty(&tokens)?)?;
+    // println!("[DEBUG] finish lexeme scanner.");
 
     // 语法分析错误处理
     let mut parser = SyntaxParser::new(tokens);
@@ -49,9 +48,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
 
     // 保存语法树
-    let ast_path = Path::new("output").join("ast_result.json");
-    fs::write(ast_path, serde_json::to_string_pretty(&ast)?)?;
-    println!("[DEBUG] finish parser.");
+    // let ast_path = Path::new("output").join("ast_result.json");
+    // fs::write(ast_path, serde_json::to_string_pretty(&ast)?)?;
+    // println!("[DEBUG] finish parser.");
 
     // 解释执行错误处理
     let mut my_interpreter = Interpreter::new();
@@ -61,6 +60,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     })?;
 
-    println!("[DEBUG] finish interpreter.");
+    // println!("[DEBUG] finish interpreter.");
     Ok(())
 }

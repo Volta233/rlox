@@ -23,7 +23,7 @@ impl fmt::Display for ParseError {
                 }
             }
         };
-        write!(f, "Error at {}: {}", location, self.message)
+        write!(f, "Error at {}: {}.", location, self.message)
     }
 }
 

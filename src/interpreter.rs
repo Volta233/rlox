@@ -35,8 +35,7 @@ impl Interpreter {
             // 参数检查
             if !args.is_empty() {
                 return Err(RuntimeError::Runtime(
-                    Token::new_identifier("clock".to_string()),
-                    format!("Expected 0 arguments, got {}", args.len()),
+                    format!("Expected 0 arguments but got {}.", args.len()),
                 ));
             }
             
@@ -44,8 +43,7 @@ impl Interpreter {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_err(|_| RuntimeError::Runtime(
-                    Token::new_identifier("clock".to_string()),
-                    "SystemTime error".to_string(),
+                    "SystemTime error.".to_string(),
                 ))?;
             Ok(Literal::NumberValue(now.as_secs_f64()))
         }));
@@ -77,7 +75,7 @@ impl Interpreter {
                 let right_val = self.evaluate(right)?;
                 match operator.token_type {
                     TokenType::Minus => self
-                        .check_number_operand(operator, &right_val)
+                        .check_number_operand(&right_val)
                         .map(|n| Literal::NumberValue(-n)),
                     TokenType::Bang => Ok(Literal::Boolean(!self.is_truthy(&right_val))),
                     _ => unreachable!(),
@@ -94,9 +92,9 @@ impl Interpreter {
                 match operator.token_type {
                     // 算术运算
                     TokenType::Plus => self.add_values(&left_val, &right_val),
-                    TokenType::Minus => self.sub_numbers(&left_val, &right_val, operator),
-                    TokenType::Star => self.mul_numbers(&left_val, &right_val, operator),
-                    TokenType::Slash => self.div_numbers(&left_val, &right_val, operator),
+                    TokenType::Minus => self.sub_numbers(&left_val, &right_val),
+                    TokenType::Star => self.mul_numbers(&left_val, &right_val),
+                    TokenType::Slash => self.div_numbers(&left_val, &right_val),
                     // 比较运算
                     TokenType::Greater => self.compare(&left_val, &right_val, |a, b| a > b),
                     TokenType::GreaterEqual => self.compare(&left_val, &right_val, |a, b| a >= b),
@@ -109,11 +107,10 @@ impl Interpreter {
                     TokenType::BangEqual => {
                         Ok(Literal::Boolean(!self.is_equal(&left_val, &right_val)))
                     }
-                    TokenType::And => self.logical_and(&left_val, &right_val, operator),
-                    TokenType::Or => self.logical_or(&left_val, &right_val, operator),
+                    TokenType::And => self.logical_and(&left_val, &right_val),
+                    TokenType::Or => self.logical_or(&left_val, &right_val),
                     _ => Err(RuntimeError::Runtime(
-                        operator.clone(),
-                        "Invalid operator".into(),
+                        "Invalid operator.".into(),
                     )),
                 }
             }
@@ -142,8 +139,7 @@ impl Interpreter {
                             self.call_function(&bound_func, args, paren)
                         } else {
                             Err(RuntimeError::Runtime(
-                                paren.clone(),
-                                format!("Undefined method '{}'", method_name),
+                                format!("Undefined property '{}'.", method_name),
                             ))
                         }
                     }
@@ -152,8 +148,7 @@ impl Interpreter {
                         func(&args)
                     }
                     _ => Err(RuntimeError::Runtime(
-                        paren.clone(),
-                        "Can only call functions and classes".into(),
+                        "Can only call functions and classes.".into(),
                     )),
                 }
             }
@@ -163,8 +158,7 @@ impl Interpreter {
                     Literal::ClassValue(c) => c,
                     _ => {
                         return Err(RuntimeError::Runtime(
-                            keyword.clone(),
-                            "Invalid super class".into(),
+                            "Invalid super class.".into(),
                         ));
                     }
                 };
@@ -174,8 +168,7 @@ impl Interpreter {
                     Literal::InstanceValue(i) => i,
                     _ => {
                         return Err(RuntimeError::Runtime(
-                            keyword.clone(),
-                            "super must be used in instance method".into(),
+                            "super must be used in instance method.".into(),
                         ));
                     }
                 };
@@ -183,8 +176,7 @@ impl Interpreter {
                 // 步骤3：查找超类方法
                 let method = super_class.find_method(&method.lexeme).ok_or_else(|| {
                     RuntimeError::Runtime(
-                        method.clone(),
-                        format!("Undefined method '{}'", method.lexeme),
+                        format!("Undefined property '{}'.", method.lexeme),
                     )
                 })?;
 
@@ -195,8 +187,7 @@ impl Interpreter {
                 } else {
                     // 使用调用方法时的方法名 Token 来构建错误
                     Err(RuntimeError::Runtime(
-                        keyword.clone(),
-                        format!("'{}' is not a function", keyword.lexeme).into(),
+                        format!("'{}' is not a function.", keyword.lexeme).into(),
                     ))
                 }
             }
@@ -213,16 +204,14 @@ impl Interpreter {
                                 Ok(Literal::FunctionValue(bound_func))
                             } else {
                                 Err(RuntimeError::Runtime(
-                                    name.clone(),
-                                    format!("Undefined property '{}'", name.lexeme),
+                                    format!("Undefined property '{}'.", name.lexeme),
                                 ))
                             }
                         }
                     }
                 } else {
                     Err(RuntimeError::Runtime(
-                        name.clone(),
-                        "Only instances have attributes".into(),
+                        "Only instances have attributes.".into(),
                     ))
                 }
             }
@@ -245,8 +234,7 @@ impl Interpreter {
                     Ok(Literal::InstanceValue(instance))
                 } else {
                     Err(RuntimeError::Runtime(
-                        name.clone(),
-                        "Only instances can have fields".into(),
+                        "Only instances can have fields.".into(),
                     ))
                 }
             }
@@ -260,8 +248,7 @@ impl Interpreter {
                     Ok(Literal::InstanceValue(instance))
                 } else {
                     Err(RuntimeError::Runtime(
-                        keyword.clone(),
-                        "Invalid 'this' context".into(),
+                        "Invalid 'this' context.".into(),
                     ))
                 }
             }
@@ -277,13 +264,12 @@ impl Interpreter {
         }
     }
 
-    fn check_number_operand(&self, op: &Token, val: &Literal) -> Result<f64> {
+    fn check_number_operand(&self, val: &Literal) -> Result<f64> {
         if let Literal::NumberValue(n) = val {
             Ok(*n)
         } else {
             Err(RuntimeError::Runtime(
-                op.clone(),
-                "Operand must be a number".into(),
+                "Operand must be a number.".into(),
             ))
         }
     }
@@ -298,26 +284,25 @@ impl Interpreter {
                 Ok(Literal::StringValue(format!("{}{}", s1, s2)))
             }
             _ => Err(RuntimeError::Runtime(
-                Token::new(TokenType::Plus, 0, "+".into(), None),
-                "Operands must be two numbers or two strings".into(),
+                "Operands must be two numbers or two strings.".into(),
             )),
         }
     }
 
-    fn sub_numbers(&self, left: &Literal, right: &Literal, op: &Token) -> Result<Literal> {
-        let (a, b) = self.check_number_operands(left, right, op)?;
+    fn sub_numbers(&self, left: &Literal, right: &Literal) -> Result<Literal> {
+        let (a, b) = self.check_number_operands(left, right)?;
         Ok(Literal::NumberValue(a - b))
     }
 
-    fn mul_numbers(&self, left: &Literal, right: &Literal, op: &Token) -> Result<Literal> {
-        let (a, b) = self.check_number_operands(left, right, op)?;
+    fn mul_numbers(&self, left: &Literal, right: &Literal) -> Result<Literal> {
+        let (a, b) = self.check_number_operands(left, right)?;
         Ok(Literal::NumberValue(a * b))
     }
 
-    fn div_numbers(&self, left: &Literal, right: &Literal, op: &Token) -> Result<Literal> {
-        let (a, b) = self.check_number_operands(left, right, op)?;
+    fn div_numbers(&self, left: &Literal, right: &Literal) -> Result<Literal> {
+        let (a, b) = self.check_number_operands(left, right)?;
         if b == 0.0 {
-            return Err(RuntimeError::Runtime(op.clone(), "Division by zero".into()));
+            return Err(RuntimeError::Runtime("Division by zero.".into()));
         }
         Ok(Literal::NumberValue(a / b))
     }
@@ -349,27 +334,26 @@ impl Interpreter {
         }
     }
 
-    fn as_bool(&self, val: &Literal, op: &Token) -> Result<bool> {
+    fn as_bool(&self, val: &Literal) -> Result<bool> {
         match val {
             Literal::Boolean(b) => Ok(*b),
             _ => Err(RuntimeError::Runtime(
-                op.clone(),
-                format!("Operand must be boolean (got {})", val.type_name()),
+                format!("Operand must be boolean (got {}).", val.type_name()),
             )),
         }
     }
 
     // 逻辑与运算
-    fn logical_and(&self, a: &Literal, b: &Literal, op: &Token) -> Result<Literal> {
-        let a_bool = self.as_bool(a, op)?;
-        let b_bool = self.as_bool(b, op)?;
+    fn logical_and(&self, a: &Literal, b: &Literal) -> Result<Literal> {
+        let a_bool = self.as_bool(a)?;
+        let b_bool = self.as_bool(b)?;
         Ok(Literal::Boolean(a_bool && b_bool))
     }
 
     // 逻辑或运算
-    fn logical_or(&self, a: &Literal, b: &Literal, op: &Token) -> Result<Literal> {
-        let a_bool = self.as_bool(a, op)?;
-        let b_bool = self.as_bool(b, op)?;
+    fn logical_or(&self, a: &Literal, b: &Literal) -> Result<Literal> {
+        let a_bool = self.as_bool(a)?;
+        let b_bool = self.as_bool(b)?;
         Ok(Literal::Boolean(a_bool || b_bool))
     }
 
@@ -385,8 +369,7 @@ impl Interpreter {
                 Ok(Literal::Boolean(comp(a.len() as f64, b.len() as f64)))
             }
             _ => Err(RuntimeError::Runtime(
-                Token::new(TokenType::EqualEqual, 0, "".into(), None),
-                "Operands must be numbers or strings".into(),
+                "Operands must be numbers or strings.".into(),
             )),
         }
     }
@@ -396,14 +379,12 @@ impl Interpreter {
         &self,
         left: &Literal,
         right: &Literal,
-        op: &Token,
     ) -> Result<(f64, f64)> {
         if let (Literal::NumberValue(a), Literal::NumberValue(b)) = (left, right) {
             Ok((*a, *b))
         } else {
             Err(RuntimeError::Runtime(
-                op.clone(),
-                "Operands must be numbers".into(),
+                "Operands must be numbers.".into(),
             ))
         }
     }
@@ -513,8 +494,7 @@ impl Interpreter {
                             Literal::ClassValue(c) => Some(Box::new(c)),
                             _ => {
                                 return Err(RuntimeError::Runtime(
-                                    name.clone(),
-                                    "Superclass must be a class".into(),
+                                    "Superclass must be a class.".into(),
                                 ));
                             }
                         }
