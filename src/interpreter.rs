@@ -384,7 +384,7 @@ impl Interpreter {
             Ok((*a, *b))
         } else {
             Err(RuntimeError::Runtime(
-                "Operands must be numbers.".into(),
+                "Operands must be two numbers or two strings.".into(),
             ))
         }
     }
@@ -418,20 +418,38 @@ impl Interpreter {
                 result
             }
             Stmt::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                let cond_result = self.evaluate(condition)?; // 隔离作用域
-                if self.is_truthy(&cond_result) {
-                    self.execute(then_branch)
-                } else {
-                    else_branch.as_ref().map_or(Ok(()), |e| self.execute(e))
-                }
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            let cond_result = self.evaluate(condition)?;
+            
+            // 新增：检查条件是否为布尔类型
+            if !matches!(cond_result, Literal::Boolean(_)) {
+                //return Err(RuntimeError::Runtime(
+                //    format!("Condition must be boolean, got {}", cond_result.type_name())
+                //));
+                panic!();
             }
+            
+            if self.is_truthy(&cond_result) {
+                self.execute(then_branch)
+            } else {
+                else_branch.as_ref().map_or(Ok(()), |e| self.execute(e))
+            }
+        }
             Stmt::While { condition, body } => {
                 while {
                     let cond = self.evaluate(condition)?; // 每次循环重新计算条件
+
+
+                    if !matches!(cond, Literal::Boolean(_)) {
+                    //return Err(RuntimeError::Runtime(
+                    //    format!("Loop condition must be boolean, got {}", cond.type_name())
+                    //));
+                    panic!();
+                }
+
                     self.is_truthy(&cond)
                 } {
                     self.execute(body)?;
