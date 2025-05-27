@@ -1,8 +1,8 @@
 use clap::Parser; 
 use std::fs;
-use rlox::scanner::Scanner;
-use rlox::syntaxer::Parser as SyntaxParser; // 重命名语法分析器
-use rlox::interpreter::Interpreter;
+use lox::scanner::Scanner;
+use lox::syntaxer::Parser as SyntaxParser; // 重命名语法分析器
+use lox::interpreter::Interpreter;
 use std::error::Error;
 
 #[derive(clap::Parser)] // 明确指定使用 clap 的宏
