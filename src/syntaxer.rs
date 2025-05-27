@@ -7,13 +7,23 @@ use std::fmt;
 // ------------------- 错误处理结构 -------------------
 #[derive(Debug)]
 pub struct ParseError {
-    pub line: usize,
-    pub message: String,
+    pub token: Token,      // 保存触发错误的Token
+    pub message: String,   // 原始错误消息
 }
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[line {}] Syntax Error: {}", self.line, self.message)
+        let location = match self.token.token_type {
+            TokenType::Eof => "EOF".to_string(),
+            _ => {
+                if self.token.lexeme.is_empty() {
+                    format!("{:?}", self.token.token_type) // 处理其他无 lexeme 的情况
+                } else {
+                    format!("'{}'", self.token.lexeme)
+                }
+            }
+        };
+        write!(f, "Error at {}: {}", location, self.message)
     }
 }
 
@@ -502,8 +512,8 @@ impl Parser {
 
     fn error(&self, token: &Token, message: &str) -> ParseError {
         ParseError {
-            line: token.line,
-            message: format!("{} (found '{}')", message, token.lexeme),
+            token: token.clone(),
+            message: message.to_string(),
         }
     }
 
