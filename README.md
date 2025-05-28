@@ -7,10 +7,19 @@
 词法分析部分有很多问题，生成AST并不健壮。
 
 file test: cargo run -- test.lox
+使用自动化脚本测试需要：
+cd 到test_runner目录  cargo build --release
+然后  cargo run --release
+由于是硬编码，所以添加新的测试样例的话需要将main.rs中for的索引范围增加
+
+
 
 完成了错误信息格式化输出的处理
 完成了类方法调用的BUG修复
 部分测试样例已通过
 
+
+
+
 TODO：
-部分错误信息还未根据PPT进行调整
+super超类的处理存在很大问题

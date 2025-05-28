@@ -1,0 +1,7 @@
+[package]
+name = "test_runner"
+version = "0.3.0"
+edition = "2021"
+
+[dependencies]
+colored = "2.1"  # 仅保留颜色输出依赖

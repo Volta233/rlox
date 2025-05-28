@@ -1,6 +1,6 @@
 /target
 /output
 test.lox
-/tests
 submit.zip
+tests/test_runner/target
 /to_*

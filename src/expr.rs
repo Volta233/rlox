@@ -38,11 +38,6 @@ pub enum Expr {
         object: Box<Expr>,  // 对象表达式（如obj.x中的obj）
         name: Token,         // 属性名（如x）
     },
-    // GetMethod {
-    //     object: Box<Expr>,  // 对象表达式（如obj.x中的obj）
-    //     name: Token,         // 类中的方法名（如x）
-    // },
-    // 属性赋值
     Set {
         object: Box<Expr>,
         name: Token,

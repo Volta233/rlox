@@ -1,0 +1,10 @@
+D:\大三下\rust\rlox\tests\test_runner\target\debug\deps\libanstyle_wincon-bac5a7f745b24f13.rmeta: C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\lib.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\ansi.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\stream.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\windows.rs
+
+D:\大三下\rust\rlox\tests\test_runner\target\debug\deps\libanstyle_wincon-bac5a7f745b24f13.rlib: C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\lib.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\ansi.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\stream.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\windows.rs
+
+D:\大三下\rust\rlox\tests\test_runner\target\debug\deps\anstyle_wincon-bac5a7f745b24f13.d: C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\lib.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\ansi.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\stream.rs C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\windows.rs
+
+C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\lib.rs:
+C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\ansi.rs:
+C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\stream.rs:
+C:\Users\33134\.cargo\registry\src\mirrors.tuna.tsinghua.edu.cn-e791a3f93f26854f\anstyle-wincon-3.0.8\src\windows.rs:

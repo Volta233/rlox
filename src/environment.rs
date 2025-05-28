@@ -16,7 +16,7 @@ impl fmt::Display for RuntimeError {
         match self {
             RuntimeError::Return(_) => write!(f, "Return statement correctly."),
             RuntimeError::Runtime(msg) => 
-                write!(f, "Runtime Error: {}", msg),
+                write!(f, "RuntimeError: {}", msg),
         }
     }
 }
@@ -56,9 +56,9 @@ impl Environment {
         } else {
             // 特殊处理this关键字
             if key == "this" {
-                Err(RuntimeError::Runtime("this isn't bound in environment".into()))
+                Err(RuntimeError::Runtime("this isn't bound in environment.".into()))
             } else {
-                Err(RuntimeError::Runtime(format!("Undefined variable '{}'", key)))
+                Err(RuntimeError::Runtime(format!("Undefined variable '{}'.", key)))
             }
         }
     }
@@ -71,7 +71,7 @@ impl Environment {
         } else if let Some(env) = &mut self.enclosing {
             env.assign(name, value)
         } else {
-            Err(RuntimeError::Runtime(format!("Undefined variable '{}'", key)))
+            Err(RuntimeError::Runtime(format!("Undefined variable '{}'.", key)))
         }
     }
 
