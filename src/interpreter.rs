@@ -126,14 +126,13 @@ impl Interpreter {
                 match callee_val {
                     Literal::FunctionValue(func) => self.call_function(&func, args, paren),
                     Literal::ClassValue(cls) => {
-                        // 类实例化调用（call_class_constructor内部已处理init方法）
+                        // 类实例化调用
                         let instance = self.call_class_constructor(&cls, args, paren)?;
                         Ok(instance)
                     }
                     // 处理实例方法调用
                     Literal::InstanceValue(inst) => {
                         let method_name = self.get_call_name(callee);
-                        // println!("[DEBUG] call method with name {}", method_name);
                         if let Some(Literal::FunctionValue(func)) = inst.class.find_method(&method_name) {
                             let bound_func = func.bind(&inst);
                             self.call_function(&bound_func, args, paren)
@@ -471,13 +470,26 @@ impl Interpreter {
                 params,
                 body,
             } => {
-                 let function = LoxFunction {
+                // 创建临时占位符环境
+                let mut temp_env = self.environment.deep_clone();
+                temp_env.define(name.lexeme.clone(), Literal::Nil); // 预定义占位符
+                
+                // 创建函数（闭包使用临时环境）
+                let mut func = LoxFunction {
                     params: params.clone(),
                     body: body.clone(),
-                    closure: Box::new(self.environment.deep_clone()),
-                    is_initializer: false, // 普通函数不是构造器
+                    closure: Box::new(temp_env),
+                    is_initializer: false,
                 };
-                self.environment.define(name.lexeme.clone(), Literal::FunctionValue(function));
+                
+                // 更新闭包环境中的函数引用
+                func.closure.assign(
+                    &Token::new_identifier(name.lexeme.clone()),
+                    Literal::FunctionValue(func.clone())
+                )?;
+
+                // 将函数绑定到当前环境
+                self.environment.define(name.lexeme.clone(), Literal::FunctionValue(func));
                 Ok(())
             }
 
@@ -504,7 +516,15 @@ impl Interpreter {
 
                 // 创建类环境（继承当前环境）
                 let mut class_env = Environment::new(Some(self.environment.clone()));
-
+                
+                // 如果有超类，将super绑定到超类
+                if let Some(super_class) = &super_class {
+                    class_env.define(
+                        "super".to_string(),
+                        Literal::ClassValue((**super_class).clone()),
+                    );
+                }
+                
                 // 将方法转换为函数值存入环境
                 for method in methods {
                     if let Stmt::Function {
