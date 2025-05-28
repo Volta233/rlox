@@ -3,13 +3,14 @@ use crate::expr::Expr;
 use crate::statement::Stmt;
 use crate::token::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
 pub struct Interpreter {
-    environment: Box<Environment>, // 当前作用域
+    environment: Rc<RefCell<Environment>>,
     instance_counter: usize, // 新增实例计数器
 }
 
@@ -29,9 +30,9 @@ impl Interpreter {
 
     pub fn new() -> Self {
         // 预定义全局函数（如clock）
-        let mut env = Environment::new(None);
+        let env = Environment::new(None);
         // 定义 clock 函数（返回自 Unix 纪元以来的秒数）
-        env.define("clock".to_string(), Literal::NativeFunctionValue(|args| {
+        env.borrow_mut().define("clock".to_string(), Literal::NativeFunctionValue(|args| {
             // 参数检查
             if !args.is_empty() {
                 return Err(RuntimeError::Runtime(
@@ -49,7 +50,7 @@ impl Interpreter {
         }));
 
         Self {
-            environment: Box::new(env),
+            environment: env,
             instance_counter: 0,
         }
     }
@@ -59,9 +60,6 @@ impl Interpreter {
         for stmt in statements {
             self.execute(stmt)?;
 
-            // DEBUG
-            // self.debug_print_env();
-
         }
         Ok(())
     }
@@ -69,7 +67,7 @@ impl Interpreter {
     fn evaluate(&mut self, expr: &Expr) -> Result<Literal> {
         match expr {
             Expr::Literal { value } => Ok(value.clone()),
-            Expr::Variable { name } => self.environment.get(name),
+            Expr::Variable { name } => self.environment.borrow().get(name),
             Expr::Grouping { expression } => self.evaluate(expression),
             Expr::Unary { operator, right } => {
                 let right_val = self.evaluate(right)?;
@@ -153,7 +151,7 @@ impl Interpreter {
             }
             Expr::Super { keyword, method } => {
                 // 步骤1：获取超类引用
-                let super_class = match self.environment.get(keyword)? {
+                let super_class = match self.environment.borrow().get(keyword)? {
                     Literal::ClassValue(c) => c,
                     _ => {
                         return Err(RuntimeError::Runtime(
@@ -163,7 +161,7 @@ impl Interpreter {
                 };
 
                 // 步骤2：获取当前实例的this绑定
-                let this_instance = match self.environment.get(&Token::this())? {
+                let this_instance = match self.environment.borrow().get(&Token::this())? {
                     Literal::InstanceValue(i) => i,
                     _ => {
                         return Err(RuntimeError::Runtime(
@@ -217,7 +215,7 @@ impl Interpreter {
             // 变量赋值表达式
             Expr::Assign { name, value } => {
                 let val = self.evaluate(value)?;
-                self.environment.assign(name, val.clone())?;
+                self.environment.borrow_mut().assign(name, val.clone())?;
                 Ok(val)
             }
             Expr::Set {
@@ -240,7 +238,7 @@ impl Interpreter {
             Expr::This { keyword } => {
                 // 从当前环境获取this绑定
                 // self.environment.check_this_binding(format!("Checking 'this' at line {}", keyword.line));
-                let this_value = self.environment.get(keyword)?;
+                let this_value = self.environment.borrow().get(keyword)?;
 
                 // 验证必须是实例类型
                 if let Literal::InstanceValue(instance) = this_value {
@@ -404,16 +402,23 @@ impl Interpreter {
                     Some(expr) => self.evaluate(expr)?,
                     None => Literal::Nil,
                 };
-                self.environment.define(name.lexeme.clone(), value);
+                self.environment.borrow_mut().define(name.lexeme.clone(), value);
                 Ok(())
             }
             Stmt::Block { statements } => {
-                let previous = self.environment.clone();
-                self.environment = Box::new(Environment::new(Some(previous)));
+                // 保存当前环境
+                let previous_env = self.environment.clone();
+                
+                // 创建新环境（继承当前环境）
+                self.environment = Environment::new(Some(previous_env));
+                
+                // 执行块内语句
                 let result = self.execute_block(statements);
-                if let Some(env) = self.environment.enclosing.take() {
-                    self.environment = env;
-                }
+                
+                // 恢复父环境
+                let restore = self.environment.borrow().enclosing.as_ref().unwrap().clone();
+                self.environment = restore;
+                
                 result
             }
             Stmt::If {
@@ -470,26 +475,28 @@ impl Interpreter {
                 params,
                 body,
             } => {
-                // 创建临时占位符环境
-                let mut temp_env = self.environment.deep_clone();
-                temp_env.define(name.lexeme.clone(), Literal::Nil); // 预定义占位符
+                // 创建闭包环境（继承当前环境）
+                let closure_env = Environment::new(Some(self.environment.clone()));
                 
-                // 创建函数（闭包使用临时环境）
-                let mut func = LoxFunction {
+                // 预定义函数名（用于递归）
+                closure_env.borrow_mut().define(name.lexeme.clone(), Literal::Nil);
+
+                // 创建函数对象
+                let func = LoxFunction {
                     params: params.clone(),
                     body: body.clone(),
-                    closure: Box::new(temp_env),
+                    closure: closure_env.clone(),
                     is_initializer: false,
                 };
-                
+
                 // 更新闭包环境中的函数引用
-                func.closure.assign(
+                closure_env.borrow_mut().assign(
                     &Token::new_identifier(name.lexeme.clone()),
                     Literal::FunctionValue(func.clone())
                 )?;
 
                 // 将函数绑定到当前环境
-                self.environment.define(name.lexeme.clone(), Literal::FunctionValue(func));
+                self.environment.borrow_mut().define(name.lexeme.clone(), Literal::FunctionValue(func));
                 Ok(())
             }
 
@@ -515,31 +522,30 @@ impl Interpreter {
                 };
 
                 // 创建类环境（继承当前环境）
-                let mut class_env = Environment::new(Some(self.environment.clone()));
+                let class_env = Environment::new(Some(self.environment.clone()));
                 
                 // 如果有超类，将super绑定到超类
                 if let Some(super_class) = &super_class {
-                    class_env.define(
+                    class_env.borrow_mut().define(
                         "super".to_string(),
                         Literal::ClassValue((**super_class).clone()),
                     );
                 }
                 
-                // 将方法转换为函数值存入环境
+                // 将方法存入类环境
                 for method in methods {
                     if let Stmt::Function {
                         name: method_name,
                         params,
                         body,
-                    } = method
-                    {
+                    } = method {
                         let func = LoxFunction {
                             params: params.clone(),
                             body: body.clone(),
-                            closure: Box::new(class_env.deep_clone()),
+                            closure: class_env.clone(), // 直接使用 Rc 克隆
                             is_initializer: method_name.lexeme == "init",
                         };
-                        class_env.define(
+                        class_env.borrow_mut().define(
                             method_name.lexeme.clone(),
                             Literal::FunctionValue(func),
                         );
@@ -553,7 +559,7 @@ impl Interpreter {
                     superclass: super_class,
                 };
 
-                self.environment.define(name.lexeme.clone(), Literal::ClassValue(class));
+                self.environment.borrow_mut().define(name.lexeme.clone(), Literal::ClassValue(class));
                 Ok(())
             }
 
@@ -569,14 +575,11 @@ impl Interpreter {
     }
 
     fn execute_block(&mut self, stmts: &[Stmt]) -> Result<()> {
-        let previous = self.environment.deep_clone(); // 使用深度克隆
-        self.environment = Box::new(Environment::new(
-            Some(Box::new(previous)), // 直接使用克隆的环境
-        ));
+        let previous = Rc::clone(&self.environment);
+        self.environment = Environment::new(Some(previous));
         let result = stmts.iter().try_for_each(|stmt| self.execute(stmt));
-        if let Some(enclosing) = &self.environment.enclosing {
-            self.environment = enclosing.clone();
-        } // 恢复环境
+        let cur_environment = self.environment.borrow().enclosing.as_ref().unwrap().clone();
+        self.environment = cur_environment;
         result
     }
 
@@ -588,26 +591,19 @@ impl Interpreter {
         args: Vec<Literal>,
         _: &Token,
     ) -> Result<Literal> {
-        // 创建新的调用环境（继承函数闭包）
-        let mut call_env = Environment::new(Some(func.closure.clone()));
-
-        // 检查父环境是否包含 `this`
-        // if let Some(parent) = &call_env.enclosing {
-        //     parent.check_this_binding("Parent of call_env in call_function".into());
-        // }
-        // func.closure.check_this_binding("Before calling function".to_string());
-
+        let call_env = Environment::new(Some(Rc::clone(&func.closure)));
+    
         // 绑定参数
         for (param, arg) in func.params.iter().zip(args.iter()) {
-            call_env.define(param.lexeme.clone(), arg.clone());
+            call_env.borrow_mut().define(param.lexeme.clone(), arg.clone());
         }
 
         // 执行函数体
-        let prev_env = std::mem::replace(&mut self.environment, Box::new(call_env));
+        let prev_env = Rc::clone(&self.environment);
+        self.environment = Rc::clone(&call_env);
         let result = self.execute_block(&func.body);
         self.environment = prev_env;
 
-         // 初始化方法不依赖返回值
         if func.is_initializer {
             Ok(Literal::Nil) // 返回值被call_class_constructor忽略
         } else {
@@ -626,13 +622,17 @@ impl Interpreter {
         args: Vec<Literal>,
         paren: &Token,
     ) -> Result<Literal> {
-        // 创建实例环境，不再继承类的环境
-        let instance_env = Environment::new(None); // 修改此处
         let instance_name = format!("{}#{}", cls.name, self.instance_counter);
         self.instance_counter += 1;
+
+        let instance_env = Rc::new(RefCell::new(Environment {
+            values: HashMap::new(),
+            enclosing: Some(Rc::clone(&cls.environment)),
+        }));
+        
         let instance = LoxInstance {
             class: cls.clone(),
-            environment: Rc::new(RefCell::new(instance_env)),
+            environment: instance_env,
             name: instance_name,
         };
 
@@ -645,7 +645,7 @@ impl Interpreter {
     }
 
     pub fn debug_print_env(&self) {
-        self.environment.debug_print(0);
+        self.environment.borrow().debug_print(0);
     }
 
     fn stringify(&self, value: Literal) -> String {

@@ -2,20 +2,21 @@ use serde::Serialize;
 use crate::statement::Stmt;
 use crate::environment::{Environment, RuntimeError};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct LoxFunction {
     pub params: Vec<Token>,      // 参数列表
     pub body: Vec<Stmt>,         // 函数体
-    pub closure: Box<Environment>, // 闭包环境
+    pub closure: Rc<RefCell<Environment>>, // 闭包环境
     pub is_initializer: bool,    // 是否是初始化方法
 }
 
 #[derive(Debug, Serialize)]
 pub struct LoxClass {
     pub name: String,
-    pub environment: Environment, // 方法存储在环境中
+    pub environment: Rc<RefCell<Environment>>,
     pub superclass: Option<Box<LoxClass>>,
 }
 
@@ -23,7 +24,7 @@ impl Clone for LoxClass {
     fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
-            environment: self.environment.deep_clone(),
+            environment: self.environment.clone(), 
             superclass: self.superclass.clone(),
         }
     }
@@ -31,11 +32,8 @@ impl Clone for LoxClass {
 
 impl LoxClass {
     pub fn find_method(&self, name: &str) -> Option<Literal> {
-        // if let Ok(Literal::FunctionValue(func)) = self.environment.get(&Token::new_identifier(name.to_string())) {
-        //     func.closure.check_this_binding("Found method in class".to_string());
-        // }
-        // 在当前类环境查找
-        match self.environment.get(&Token::new_identifier(name.to_string())) {
+
+        match self.environment.borrow().get(&Token::new_identifier(name.to_string())) {
             Ok(Literal::FunctionValue(func)) => Some(Literal::FunctionValue(func)),
             Ok(_) => None,
             Err(_) => {
@@ -59,15 +57,22 @@ impl LoxClass {
 // 为方法调用添加辅助方法
 impl LoxFunction {
     pub fn bind(&self, instance: &LoxInstance) -> Self {
-        let mut closure = (*self.closure).deep_clone();
-        closure.define("this".into(), Literal::InstanceValue(instance.clone()));
-        // 检查闭包环境是否包含this
-        // closure.check_this_binding("After binding in LoxFunction::bind".to_string());
+        // 创建新环境（继承原闭包环境）
+        let new_env = Rc::new(RefCell::new(Environment {
+            values: HashMap::new(),
+            enclosing: Some(Rc::clone(&self.closure)),
+        }));
         
+        // 绑定 this
+        new_env.borrow_mut().define(
+            "this".to_string(),
+            Literal::InstanceValue(instance.clone())
+        );
+
         LoxFunction {
             params: self.params.clone(),
             body: self.body.clone(),
-            closure: Box::new(closure),
+            closure: new_env, // 直接存储 Rc
             is_initializer: self.is_initializer,
         }
     }

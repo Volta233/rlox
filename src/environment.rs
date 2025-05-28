@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use serde::Serialize;
 use crate::token::{Token, Literal};
 use std::fmt;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::error::Error;
 
 #[derive(Debug)]
@@ -32,15 +34,15 @@ type Result<T> = std::result::Result<T, RuntimeError>;
 #[derive(Debug, Clone, Serialize)]
 pub struct Environment {
     pub values: HashMap<String, Literal>,
-    pub enclosing: Option<Box<Environment>>,
+    pub enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<Box<Environment>>) -> Self {
-        Self {
+    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
             values: HashMap::new(),
             enclosing,
-        }
+        }))
     }
 
     pub fn define(&mut self, name: String, value: Literal) {
@@ -52,7 +54,7 @@ impl Environment {
         if let Some(val) = self.values.get(key) {
             Ok(val.clone())
         } else if let Some(env) = &self.enclosing {
-            env.get(name)
+            env.borrow().get(name)
         } else {
             // 特殊处理this关键字
             if key == "this" {
@@ -69,53 +71,11 @@ impl Environment {
             self.values.insert(key.to_string(), value);
             Ok(())
         } else if let Some(env) = &mut self.enclosing {
-            env.assign(name, value)
+            env.borrow_mut().assign(name, value)
         } else {
             Err(RuntimeError::Runtime(format!("Undefined variable '{}'.", key)))
         }
     }
-
-    pub fn deep_clone(&self) -> Environment {
-        let mut cloned = Self {
-            values: self.values.clone(),
-            enclosing: None,
-        };
-        if let Some(enclosing) = &self.enclosing {
-            cloned.enclosing = Some(Box::new(enclosing.deep_clone()));
-        }
-        cloned
-    }
-
-     /// 检查当前环境链中是否存在 "this" 绑定
-    pub fn has_this(&self) -> bool {
-        // 检查当前环境
-        if self.values.contains_key("this") {
-            return true;
-        }
-
-        // 递归检查父环境
-        if let Some(enclosing) = &self.enclosing {
-            enclosing.has_this()
-        } else {
-            false
-        }
-    }
-
-    /// 调试函数：检查当前环境链是否有 "this" 绑定
-    pub fn check_this_binding(&self, msg: String) {
-        let has_this = self.has_this();
-        if !has_this {
-            println!("[DEBUG] ❌ No 'this' binding: {}", msg);
-        } else {
-            match self.get(&Token::this()) {
-                Ok(Literal::InstanceValue(inst)) => {
-                    println!("[DEBUG] ✅ Has 'this' binding: {} | Instance: {}", msg, inst.name);
-                }
-                _ => println!("[DEBUG] ⚠️ Invalid 'this' binding: {}", msg),
-            }
-        }
-    }
-
 
     pub fn debug_print(&self, depth: usize) {
         println!("🛠️  Environment Depth {}:", depth);
@@ -132,7 +92,7 @@ impl Environment {
             }
         }
         if let Some(enclosing) = &self.enclosing {
-            enclosing.debug_print(depth + 1);
+            enclosing.borrow_mut().debug_print(depth + 1);
         }
     }
 }
