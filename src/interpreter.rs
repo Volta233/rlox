@@ -417,17 +417,17 @@ impl Interpreter {
                 result
             }
             Stmt::If {
-            condition,
-            then_branch,
-            else_branch,
-        } => {
-            let cond_result = self.evaluate(condition)?;
-            if self.is_truthy(&cond_result) {
-                self.execute(then_branch)
-            } else {
-                else_branch.as_ref().map_or(Ok(()), |e| self.execute(e))
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_result = self.evaluate(condition)?;
+                if self.is_truthy(&cond_result) {
+                    self.execute(then_branch)
+                } else {
+                    else_branch.as_ref().map_or(Ok(()), |e| self.execute(e))
+                }
             }
-        }
             Stmt::While { condition, body } => {
                 while {
                     let cond = self.evaluate(condition)?;
