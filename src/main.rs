@@ -18,9 +18,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     // 添加 panic hook 确保错误信息正确格式化
     std::panic::set_hook(Box::new(|panic_info| {
         if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-            eprintln!("{}", s);
+            println!("{}", s);
         } else if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-            eprintln!("{}", s);
+            println!("{}", s);
         }
         std::process::exit(1);
     }));
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     
     let tokens = scanner.scan_tokens().map_err(|errs| {
         let first_err = errs.first().unwrap();
-        eprintln!("{}", first_err);
+        println!("{}", first_err);
         std::process::exit(1);
     })?;
 
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut parser = SyntaxParser::new(tokens);
     let ast = parser.parse().map_err(|e| {
         // 使用 Display 格式输出错误
-        eprintln!("{}", e);
+        println!("{}", e);
         std::process::exit(1);
     })?;
 
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut my_interpreter = Interpreter::new();
     my_interpreter.interpret(&ast).map_err(|e| {
         // 使用 Display 格式输出错误
-        eprintln!("{}", e);
+        println!("{}", e);
         std::process::exit(1);
     })?;
 
