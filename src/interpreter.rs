@@ -131,6 +131,7 @@ impl Interpreter {
                     // 处理实例方法调用
                     Literal::InstanceValue(inst) => {
                         let method_name = self.get_call_name(callee);
+                        // println!("flag for this.");
                         if let Some(Literal::FunctionValue(func)) = inst.class.find_method(&method_name) {
                             let bound_func = func.bind(&inst);
                             self.call_function(&bound_func, args, paren)
@@ -177,7 +178,7 @@ impl Interpreter {
                     )
                 })?;
 
-                // 步骤4：创建闭包环境（绑定this）
+                // 步骤4：创建闭包环境
                 if let Literal::FunctionValue(func) = method {
                     let bound_func = func.bind(&this_instance);
                     Ok(Literal::FunctionValue(bound_func))
@@ -196,6 +197,7 @@ impl Interpreter {
                         Ok(field) => Ok(field),
                         Err(_) => {
                             // 字段不存在，查找方法并绑定实例
+                            // println!("flag2 for this.");
                             if let Some(Literal::FunctionValue(func)) = instance.class.find_method(&name.lexeme) {
                                 let bound_func = func.bind(&instance);
                                 Ok(Literal::FunctionValue(bound_func))
@@ -589,7 +591,7 @@ impl Interpreter {
         &mut self,
         func: &LoxFunction,
         args: Vec<Literal>,
-        _: &Token,
+        _paren: &Token,
     ) -> Result<Literal> {
         let call_env = Environment::new(Some(Rc::clone(&func.closure)));
     
@@ -627,9 +629,19 @@ impl Interpreter {
 
         let instance_env = Rc::new(RefCell::new(Environment {
             values: HashMap::new(),
-            enclosing: Some(Rc::clone(&cls.environment)),
+            enclosing: None,
         }));
         
+        // 从类环境中复制super绑定到实例环境
+        if let Ok(super_value) = cls.environment.borrow().get(
+            &Token::new_identifier("super".to_string())
+        ) {
+            instance_env.borrow_mut().define(
+                "super".to_string(),
+                super_value
+            );
+        }
+
         let instance = LoxInstance {
             class: cls.clone(),
             environment: instance_env,

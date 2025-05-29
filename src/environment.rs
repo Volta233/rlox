@@ -77,6 +77,36 @@ impl Environment {
         }
     }
 
+    /// 检查当前环境链中是否存在 "this" 绑定
+    pub fn has_this(&self) -> bool {
+        // 检查当前环境
+        if self.values.contains_key("this") {
+            return true;
+        }
+
+        // 递归检查父环境
+        if let Some(enclosing) = &self.enclosing {
+            enclosing.borrow().has_this()
+        } else {
+            false
+        }
+    }
+
+    /// 调试函数：检查当前环境链是否有 "this" 绑定
+    pub fn check_this_binding(&self, msg: String) {
+        let has_this = self.has_this();
+        if !has_this {
+            println!("[DEBUG] ❌ No 'this' binding: {}", msg);
+        } else {
+            match self.get(&Token::this()) {
+                Ok(Literal::InstanceValue(inst)) => {
+                    println!("[DEBUG] ✅ Has 'this' binding: {} | Instance: {}", msg, inst.name);
+                }
+                _ => println!("[DEBUG] ⚠️ Invalid 'this' binding: {}", msg),
+            }
+        }
+    }
+
     pub fn debug_print(&self, depth: usize) {
         println!("🛠️  Environment Depth {}:", depth);
         for (key, val) in &self.values {
@@ -93,6 +123,16 @@ impl Environment {
         }
         if let Some(enclosing) = &self.enclosing {
             enclosing.borrow_mut().debug_print(depth + 1);
+        }
+    }
+
+    pub fn debug_loc(&self) -> String {
+        if self.values.contains_key("this") {
+            "[有 this 绑定]".into()
+        } else if let Some(env) = &self.enclosing {
+            env.borrow().debug_loc()
+        } else {
+            "[全局环境]".into()
         }
     }
 }

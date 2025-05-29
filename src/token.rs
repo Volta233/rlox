@@ -57,10 +57,10 @@ impl LoxClass {
 // 为方法调用添加辅助方法
 impl LoxFunction {
     pub fn bind(&self, instance: &LoxInstance) -> Self {
-        // 创建新环境（继承原闭包环境）
+        // 创建新环境
         let new_env = Rc::new(RefCell::new(Environment {
             values: HashMap::new(),
-            enclosing: Some(Rc::clone(&self.closure)),
+            enclosing: Some(Rc::clone(&instance.environment)), 
         }));
         
         // 绑定 this
@@ -69,10 +69,13 @@ impl LoxFunction {
             Literal::InstanceValue(instance.clone())
         );
 
+        // DEBUG1
+        // new_env.borrow().check_this_binding("After binding in LoxFunction::bind".to_string());
+
         LoxFunction {
             params: self.params.clone(),
             body: self.body.clone(),
-            closure: new_env, // 直接存储 Rc
+            closure: new_env, 
             is_initializer: self.is_initializer,
         }
     }
