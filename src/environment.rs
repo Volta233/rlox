@@ -17,8 +17,15 @@ impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             RuntimeError::Return(_) => write!(f, "Return statement correctly."),
-            RuntimeError::Runtime(msg) => 
-                write!(f, "RuntimeError: {}", msg),
+            RuntimeError::Runtime(msg) => {
+                // 特判以 "Error: " 开头的消息
+                if msg.starts_with("Error: ") {
+                    write!(f, "{}", msg) // 直接显示原始消息
+                } else {
+                    // 其他情况添加 RuntimeError 前缀
+                    write!(f, "RuntimeError: {}", msg)
+                }
+            }
         }
     }
 }

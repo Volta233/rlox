@@ -13,17 +13,23 @@ pub struct ParseError {
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let location = match self.token.token_type {
-            TokenType::Eof => "EOF".to_string(),
-            _ => {
-                if self.token.lexeme.is_empty() {
-                    format!("{:?}", self.token.token_type) // 处理其他无 lexeme 的情况
-                } else {
-                    format!("'{}'", self.token.lexeme)
+        if self.message.starts_with("Error: ") {
+            // 特殊错误直接显示消息
+            write!(f, "{}", self.message)
+        } else {
+            // 其他错误显示位置和消息
+            let location = match self.token.token_type {
+                TokenType::Eof => "EOF".to_string(),
+                _ => {
+                    if self.token.lexeme.is_empty() {
+                        format!("{:?}", self.token.token_type)
+                    } else {
+                        format!("'{}'", self.token.lexeme)
+                    }
                 }
-            }
-        };
-        write!(f, "Error at {}: {}.", location, self.message)
+            };
+            write!(f, "Error at {}: {}", location, self.message)
+        }
     }
 }
 
@@ -33,11 +39,18 @@ impl Error for ParseError {} // 实现 Error trait
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
+    allow_this: bool, // 新增：是否允许使用this
+    in_function: bool, // 新增标志，表示当前是否在函数内
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, current: 0 }
+        Self { 
+            tokens, 
+            current: 0, 
+            allow_this: false, // 初始状态不允许
+            in_function: false,
+        }
     }
 
     // 主解析方法
@@ -74,7 +87,7 @@ impl Parser {
         // 修复超类解析逻辑
         let mut super_expr = None;
         if self.match_token(TokenType::Less) {
-            self.consume_identifier("Expect superclass name")?;
+            self.consume_identifier("Error: Superclass must be a class.")?;
             super_expr = Some(Expr::Variable {
                 name: self.previous().clone(),
             });
@@ -122,8 +135,18 @@ impl Parser {
             TokenType::LeftBrace,
             &format!("Expect '{{' before {} body", kind),
         )?;
+        // 进入方法时允许this
+        let prev_allow_this = self.allow_this;
+        let prev_in_function = self.in_function;
+        self.allow_this = kind == "method";
+        self.in_function = true; // 标记当前在函数内
 
         let body = self.block_statement()?;
+
+        // 恢复之前的状态
+        self.allow_this = prev_allow_this;
+        self.in_function = prev_in_function;
+
         Ok(Stmt::Function { name, params, body })
     }
 
@@ -262,6 +285,14 @@ impl Parser {
     // --------------- return 语句 ---------------
     fn return_statement(&mut self) -> Result<Stmt, ParseError> {
         let keyword = self.previous().clone();
+         // 检查是否在函数内部
+        if !self.in_function {
+            return Err(self.error(
+                &keyword,
+                "Error: Can't return from top-level code.",
+            ));
+        }
+
         let value = if !self.check(TokenType::Semicolon) {
             Some(self.expression()?)
         } else {
@@ -458,9 +489,17 @@ impl Parser {
                 name: self.previous().clone(),
             })
         } else if self.match_token(TokenType::This) {
-            Ok(Expr::This {
-                keyword: self.previous().clone(),
-            })
+            if self.allow_this {
+                Ok(Expr::This {
+                    keyword: self.previous().clone(),
+                })
+            } else {
+                // 生成特殊错误消息
+                Err(self.error(
+                    self.previous(),
+                    "Error: Can't use 'this' outside of a class.",
+                ))
+            }
         } else if self.match_token(TokenType::Super) {
             let keyword = self.previous().clone();
             self.consume(TokenType::Dot, "Expect '.' after 'super'")?;

@@ -400,6 +400,12 @@ impl Interpreter {
                 Ok(())
             }
             Stmt::VarDecl { name, initializer } => {
+                if self.environment.borrow().values.contains_key(&name.lexeme) {
+                    return Err(RuntimeError::Runtime(
+                        format!("Error: Already a variable with name '{}' in this scope.", name.lexeme)
+                    ));
+                }
+                
                 let value = match initializer {
                     Some(expr) => self.evaluate(expr)?,
                     None => Literal::Nil,
